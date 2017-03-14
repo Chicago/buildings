@@ -21,3 +21,7 @@ Project Description
 * Aggregate the data in meaningful ways
 * Integrate the data into [OpenGrid](http://opengrid.io/)
 
+Project Documentation
+---------------------
+
+We will use the [wiki](https://github.com/Chicago/buildings/wiki) to organize the project.
