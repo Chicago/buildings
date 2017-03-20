@@ -1,6 +1,10 @@
-# load Chicago building polygons
-# load building-related datasets with geo coordinates
-# match datasets with building polygons
+# Before using this code you must export the Building Footprint data as geoJSON:
+#   Go to https://data.cityofchicago.org/Buildings/Building-Footprints-current-/hz9b-7nh8
+#   Click "Export" and then "GeoJSON"
+#   Then save the file in your working directory as data/Buildings.geojson
+# This file will load Chicago building polygons,
+# load building-related datasets with geo coordinates,
+# and match the datasets with the polygons
 
 # library(data.table) # use later for data manipulation
 library(devtools)
@@ -32,9 +36,14 @@ proj4string(bvCoords) <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towg
 
 ## MATCH DATA TO BUILDING POLYGONS
 
-# test <- over(bvCoords, buildingPolygons)
+#run fresh
+
+test <- over(bvCoords, buildingPolygons)
+
+#Save/Read RDS
+
 # saveRDS(test, file = "data/test.Rds")
-test <- readRDS(file = "data/test.Rds")
+# test <- readRDS(file = "data/test.Rds")
 
 # calcuate match rate
 match <- !is.na(test$bldg_id)
