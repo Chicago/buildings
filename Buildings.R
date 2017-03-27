@@ -1,58 +1,70 @@
-# Before using this code you must export the Building Footprint data as geoJSON:
-#   Go to https://data.cityofchicago.org/Buildings/Building-Footprints-current-/hz9b-7nh8
-#   Click "Export" and then "GeoJSON"
-#   Then save the file in your working directory as data/Buildings.geojson
-# This file will load Chicago building polygons,
-# load building-related datasets with geo coordinates,
-# and match the datasets with the polygons
-
-# library(data.table) # use later for data manipulation
-library(devtools)
-install_github("Chicago/RSocrata", ref = "dev")
 library(rgdal)
-library(RSocrata)
+library(leaflet)
+# library(RSocrata)
 
 ## READ IN DATA (use RDS files unless you want fresh data (fresh will take much longer))
 
 #Read fresh data
 
-buildingPolygons <- readOGR(dsn="data/Buildings.geojson", layer="OGRGeoJSON")
-buildingViolations <- read.socrata("https://data.cityofchicago.org/resource/ucdv-yd74.json")
+# footprints <- readOGR(dsn="data/Buildings.geojson", layer="OGRGeoJSON", stringsAsFactors = FALSE)
+# b_vio <- read.socrata("https://data.cityofchicago.org/resource/ucdv-yd74.json")
+#commAreas <- readOGR(dsn="data/community-areas.geojson", layer="OGRGeoJSON", stringsAsFactors = FALSE)
+#westTown <- commAreas[commAreas$community == "WEST TOWN",]
+tracts <- readOGR(dsn="data/tracts.geojson", layer="OGRGeoJSON", stringsAsFactors = FALSE)
+tractsList <- c("2424","2423","2422","2421","2420","2429","2430","2431","2432","2433")
+tracts <- tracts[tracts$name10 %in% tractsList,]
 
 #Save/Read RDS
 
-# saveRDS(buildingPolygons, file = "data/building_polygons.Rds")
-# saveRDS(buildingViolations, file = "data/building_violations.Rds")
-# buildingPolygons <- readRDS(file = "data/building_polygons.Rds")
-# buildingViolations <- readRDS(file = "data/building_violations.Rds")
+# saveRDS(footprints, file = "data/building_polygons.Rds")
+# saveRDS(b_vio, file = "data/building_violations.Rds")
+footprints <- readRDS(file = "data/building_polygons.Rds")
+b_vio <- readRDS(file = "data/building_violations.Rds")
 
 ## EXTRACT COORDINATES FROM DATA
 
-bvCoords <- data.frame("longitude" = as.numeric(buildingViolations$longitude),
-                     "latitude" = as.numeric(buildingViolations$latitude))
-bvCoords <- bvCoords[complete.cases(bvCoords),]
-bvCoords <- SpatialPoints(bvCoords)
-proj4string(bvCoords) <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
+b_vio <- data.frame("address" = b_vio$address,
+                    "longitude" = as.numeric(b_vio$longitude),
+                    "latitude" = as.numeric(b_vio$latitude),
+                    stringsAsFactors = FALSE)
+b_vio <- b_vio[complete.cases(b_vio),]
+b_vio <- unique(b_vio)
+rownames(b_vio) <- seq(length=nrow(b_vio))
+b_vio <- SpatialPointsDataFrame(coords = SpatialPoints(b_vio[,c(2:3)]),
+                                data = as.data.frame(b_vio$address,
+                                                     stringsAsFactors = FALSE))
+proj4string(b_vio) <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
 
-## MATCH DATA TO BUILDING POLYGONS
+## MATCH DATA TO BUILDING POLYGONS 
 
-#run fresh
-
-test <- over(bvCoords, buildingPolygons)
-
-#Save/Read RDS
-
+# test <- over(b_vio, footprints)
 # saveRDS(test, file = "data/test.Rds")
 # test <- readRDS(file = "data/test.Rds")
+footprints_df <- over(footprints, tracts)
+footprints_df <- footprints_df[complete.cases(footprints_df),]
+rowNums <- as.numeric(rownames(footprints_df))
+footprints <- footprints[c(rowNums),]
+b_vio_df <- over(b_vio, tracts)
+b_vio_df <- b_vio_df[complete.cases(b_vio_df),]
+rowNums <- as.numeric(rownames(b_vio_df))
+b_vio <- b_vio[c(rowNums),]
 
-# calcuate match rate
-match <- !is.na(test$bldg_id)
-noMatch <- is.na(test$bldg_id)
-matchRate <- sum(match) / (sum(match) + sum(noMatch))
-matchRate <- round(matchRate * 100, digits = 0)
-print(paste0("Tried to match ", (sum(match) + sum(noMatch)), " rows to building polygons"))
-# "Tried to match 1650323 rows to building polygons"
-print(paste0("Succesfully matched ", sum(match), " rows"))
-# "Succesfully matched 350648 rows"
-print(paste0("Success rate was ", matchRate, "%"))
-# "Success rate was 21%"
+#saveRDS(footprints, "data/footprints.Rds")
+#saveRDS(b_vio, "data/b_vioSmall.Rds")
+footprints <- readRDS("data/footprints.Rds")
+b_vio <- readRDS("data/b_vioSmall.Rds")
+
+popup <- paste(footprints$label_hous, 
+               footprints$t_add1,
+               footprints$pre_dir1,
+               footprints$st_name1,
+               footprints$st_type1,
+               sep = " ")
+
+popupCoords <- b_vio$`b_vio$address`
+
+leaflet() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data = footprints, weight = 1, popup = popup) %>%
+  addCircles(data = b_vio, radius = 1, stroke = FALSE, fillOpacity = 1, fillColor = '#ff0000', popup = popupCoords)
+

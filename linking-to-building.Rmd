@@ -1,0 +1,76 @@
+---
+title: "Linking Violations to Buildings"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+In this notebook, I've made an attempt to visualize the problem of linking
+building violations to building shapes. I've plotted the buildings as shapes and
+the violations as points and put it into an interactive map. I only looked at a few census tracts so that it would be easier computationally.
+<br><br>
+
+```{r, message=FALSE, echo=FALSE}
+library(leaflet)
+polygonsSmall <- readRDS("data/polygonsSmall.Rds")
+bvCoordsSmall <- readRDS("data/bvCoordsSmall.Rds")
+
+popup <- paste(polygonsSmall$label_hous, 
+               polygonsSmall$t_add1,
+               polygonsSmall$pre_dir1,
+               polygonsSmall$st_name1,
+               polygonsSmall$st_type1,
+               sep = " ")
+
+popupCoords <- bvCoordsSmall$`bvCoords$address`
+
+leaflet() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data = polygonsSmall, weight = 1, popup = popup) %>%
+  addCircles(data = bvCoordsSmall, radius = 1, stroke = FALSE, fillOpacity = 1, fillColor = '#ff0000', popup = popupCoords)
+```  
+
+<br><br>
+
+If you click on a building shape or on a violation point, you'll see a popup with the range of the building address or the violation address. Clicking around, you can get a good idea of some of data issues.
+
+### Many Points are Off by One Building
+
+For example, there are numerous cases where the address point is associated with the wrong building next door. Here is an example:
+<br><br>
+
+Violation - 1947 W. Chicago | Building - 1949 W. Chicago
+--- | ---
+![](img/left1.png)    |    ![](img/right1.png)
+
+<br><br>
+
+In cases like this, it make sense to use a direct match on the address to link violations to buildings. This might be the first part of the linking process, after which we use latitude and longtitude to match the remaining violation points to building shapes. 
+
+### Corner Buildings
+
+Let's take a look at the building from our original case study on the Slack channel. Corner buildings like this are hard to match because the violation could be under either street. The good news is that using the coordinates and the building shape result in a positive match:
+<br><br>
+
+Violation - 652 N. Noble | Building - 1401-03 W. Huron AND 652-58 N. Noble
+--- | ---
+![](img/left3.png) | ![](img/right2.png)
+
+<br><br>
+
+### Some Points are Outside the Shapes
+
+At this point, my thinking is to first match by address, and then match by point-in-polygon for the leftover records. Next, we'd have to decide what to do with these:
+<br><br>
+
+![](img/left2.png)
+
+<br><br>
+
+Simply using distance to the polygon edge or centroid could be a good first step. If most of the remaining buildings are corner buildings like Huron and Noble, it should be OK. However, there are some cases when using the distance will make a false match. The problem is exacerbated in the Central Business District because of the size of the buildings and the age of the land plats. However, the stated goals of this project are aimed at a problem that is mainly outside the CBD, where the two problems above will cover most properties, hopefully.
+
+I am using ```sp::over()``` to find points in polygons, and will check out an R package to determine the nearest polygon for the points outside. 
+
+### Next Steps
+
+I could use the sketch outlined above and then run some tests to see how it did. If anyone sees a pattern while using the interactive map or has any thoughts about all this, please share and we can discuss.
