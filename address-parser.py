@@ -3,7 +3,6 @@ import usaddress
 import sys
 
 addr = str(sys.argv[1:])
-print(addr)
 parsed = usaddress.parse(addr)
 with open("parsed.csv",'w') as resultFile:
   wr = csv.writer(resultFile)

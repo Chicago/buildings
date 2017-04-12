@@ -2,6 +2,7 @@ library(data.table)
 library(rgdal)
 library(leaflet)
 library(RSocrata)
+library(plyr)
 
 parsedAddress <- function(addr) {
   addr <- gsub(" ", ",", addr)
@@ -13,8 +14,11 @@ parsedAddress <- function(addr) {
   parsed$V1 <- gsub(",","",parsed$V1)
   parsed$V1 <- gsub("\'","",parsed$V1)
   parsed$V1 <- gsub("[.]","",parsed$V1)
+  parsed <- data.table(parsed$V2, parsed$V1)
+  parsed <- dcast(parsed, . ~ V1, value.var = "V2")
+  parsed <- parsed[,2:ncol(parsed)]
   if (file.exists("parsed.csv")) file.remove("parsed.csv") 
-  return(parsed)
+  return(as.data.frame(parsed))
 }
 
 ## READ IN DATA 
@@ -63,6 +67,7 @@ parsedAddress <- function(addr) {
 
 footprints <- readRDS("data/footprints_small.Rds")
 b_vio <- readRDS("data/b_vioSmall.Rds")
+b_vio$address <- as.character(b_vio$address)
 
 popup <- paste(footprints$label_hous, 
                footprints$t_add1,
@@ -76,16 +81,89 @@ popupCoords <- b_vio$address
 leaflet() %>%
   addProviderTiles("CartoDB.Positron") %>%
   addPolygons(data = footprints, weight = 1, popup = popup) %>%
-  addCircles(data = b_vio, radius = 1, stroke = FALSE, fillOpacity = 1, fillColor = '#ff0000', popup = popupCoords)
+  addCircles(data = b_vio, radius = 3, stroke = FALSE, fillOpacity = 1, fillColor = '#ff0000', popup = popupCoords)
 
 ## LINK DATA
 ## 1. Link by address. Then, for unmatched points:
 ## 2. Explore using machine learning, point-in-polygon, and distance from polygon
 
-#inspect data
+# The following for loop is very slow due to command line python call
+# Use lookupTable as a reference table for quicker reading
+ 
+# addresses <- b_vio$address
+# addresses <- unique(addresses)
+# lookupTable <- c()
+# for(row in c(1:length(addresses))) {
+#   newRow <- cbind("address" = addresses[row], parsedAddress(addresses[row]))
+#   lookupTable <- rbind.fill(lookupTable, newRow)
+# }
 
-b_vio$address[456]
+# saveRDS(lookupTable, "data/lookupTable.Rds")
 
-parsedAddress(b_vio$address[456])
+lookupTable <- readRDS("data/lookupTable.Rds")
+lookupTable$address <- as.character(lookupTable$address)
+footprintAddresses <- footprints@data[,c("label_hous","t_add1","pre_dir1","st_name1","st_type1")]
+footprintAddresses$label_hous <- as.numeric(footprintAddresses$label_hous)
+footprintAddresses$t_add1 <- as.numeric(footprintAddresses$t_add1)
+footprintAddresses <- footprintAddresses[complete.cases(footprintAddresses),]
 
-footprints@data[c(343),c("label_hous","t_add1","pre_dir1","st_name1","st_type1")]
+# function for matching addresses to building footprints
+
+matchAddress <- function(footprintAddresses, addNum, preDir, street, postType) {
+  addNum <- as.numeric(addNum)
+  odd <- footprintAddresses[(footprintAddresses$label_hous %% 2) == 1,]
+  even <- footprintAddresses[(footprintAddresses$label_hous %% 2) == 0,]
+  if ((addNum %% 2 == 1)) {
+    match <- odd[odd$label_hous <= addNum &
+                   odd$t_add1 >= addNum &
+                   toupper(odd$pre_dir1) == toupper(preDir) &
+                   toupper(odd$st_name1) == toupper(street) &
+                   toupper(odd$st_type1) == toupper(postType)
+                 ,]
+  } else {
+    match <- even[even$label_hous <= addNum &
+                    even$t_add1 >= addNum &
+                    toupper(even$pre_dir1) == toupper(preDir) &
+                    toupper(even$st_name1) == toupper(street) &
+                    toupper(even$st_type1) == toupper(postType)
+                  ,]    
+  }
+  return(match)
+}
+
+matches <- c()
+for (row in c(1:nrow(lookupTable))) {
+  newMatch <- matchAddress(footprintAddresses,
+                           lookupTable$AddressNumber[row],
+                           lookupTable$StreetNamePreDirectional[row],
+                           lookupTable$StreetName[row],
+                           lookupTable$StreetNamePostType[row])
+  if (nrow(newMatch) == 0) next
+  newRow <- cbind(lookupTable[row,],
+                  newMatch,
+                  row.names = NULL)
+  matches <- rbind(matches, newRow)
+  rm(list = c("newRow","newMatch","row"))
+}
+
+matches <- data.table(matches)
+lookupTable <- data.table(lookupTable)
+unmatched <- fsetdiff(lookupTable, matches[,1:5])
+unmatched <- b_vio[b_vio$address %in% unmatched$address,]
+
+
+popupCoords <- unmatched$address
+
+leaflet() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data = footprints, weight = 1, popup = popup) %>%
+  addCircles(data = unmatched, radius = 3, stroke = FALSE, fillOpacity = 1, fillColor = '#ff0000', popup = popupCoords)
+
+# find nearest polygon to a point: 
+# http://stackoverflow.com/questions/26308426/how-do-i-find-the-polygon-nearest-to-a-point-in-r
+# What are the types of errors?
+# 1. Corner buildings (point-in or distance OK)
+# 2. Vacant lots or missing shapefile? (point-in or distance NOT OK) (HAVE A POINT VISUAL FOR PROBLEMS WITH NO MATCHING SHAPEFILE?)
+# 3. Long / missing ranges (point-in or distance OK)
+# 4. Wildcards (point-in or distance OK)
+# 5. use building features against violation characteristics? (future possibility)
