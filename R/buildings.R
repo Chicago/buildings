@@ -2,10 +2,11 @@
 #  Import all Chicago building data
 # ---------------------------------------------------------------------------- #
 
+# ogrInfo(dsn = "data/Buildings.geojson")
 # buildings <- readOGR(dsn="data/Buildings.geojson", stringsAsFactors = FALSE)
 
 # ---------------------------------------------------------------------------- #
-#  Remove everything except a few census tracts of building data
+#  DRILL DOWN TO A FEW CENSUS TRACTS FOR FASTER COMPUTATION 
 # ---------------------------------------------------------------------------- #
 
 # tracts <- readOGR(dsn="data/tracts.geojson", layer="OGRGeoJSON", 
@@ -17,11 +18,11 @@
 # buildings_df <- buildings_df[complete.cases(buildings_df),]
 # rowNums <- as.numeric(rownames(buildings_df))
 # buildings <- buildings[c(rowNums),]
-# writeOGR(buildings, "data/buildings-small.geojson",layer="OGRGeoJSON", 
+# writeOGR(buildings, "data/buildings-small.geojson",layer="OGRGeoJSON",
 #          driver="GeoJSON")
 
 # ---------------------------------------------------------------------------- #
-#  Read small buildings geojson file
+#  Read small geojson file
 # ---------------------------------------------------------------------------- #
 
 buildings <- readOGR("data/buildings-small.geojson", layer="OGRGeoJSON",
