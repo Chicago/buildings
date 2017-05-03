@@ -178,27 +178,27 @@ referenceTable <- referenceTable[complete.cases(referenceTable),]
 # give all other datasets a building ID and PIN as possible
 # tidy each dataset
 
-test <- intersect(taxShapes, buildingShapes)
+test <- intersect(taxShapes, buildings)
 test$area <- sapply(slot(test, "polygons"), slot, "area")
 summary(test$area)
 
 #      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-# 0.000e+00 2.369e-09 7.786e-09 1.144e-08 1.382e-08 8.797e-07 
+# 0.000e+00 3.815e-09 8.667e-09 1.163e-08 1.290e-08 3.626e-07  
 
 hist(test$area)
-hist(test$area[test$area < 1.382e-08])
-hist(test$area[test$area < 1.144e-08])
-hist(test$area[test$area < 7.786e-09], xlab = "Area", main = "Histogram of Building Shape Area")
-hist(test$area[test$area < 2.369e-09])
+hist(test$area[test$area < summary(test$area)[5]], 
+     xlab = "Area",
+     main = "Histogram of Building Shape Area")
 
 # min to 1st quartile
-min_first <- test[test$area < 2.369e-09,]
+min_first <- test[test$area < summary(test$area)[2],]
 
 # 1st quartile to median
-first_median <- test[test$area >= 2.369e-09 & test$area < 7.786e-09,]
+first_median <- test[test$area >= summary(test$area)[2] & 
+                       test$area < summary(test$area)[3],]
 
 # median to 3rd quartile
-median_plus <- test[test$area >= 7.786e-09,]
+median_plus <- test[test$area >= summary(test$area)[3],]
 
 leaflet() %>%
   addProviderTiles("CartoDB.Positron") %>%
