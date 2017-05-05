@@ -71,15 +71,15 @@ source("R/tax-parcels.R")
 #  Clean addresses using DataMade's python parser (very slow)
 # ---------------------------------------------------------------------------- #
 
-addresses <- violations$address
-addresses <- unique(addresses)
-lookupTable <- c()
-for(row in c(1:length(addresses))) {
-  newRow <- cbind("address" = addresses[row], parsedAddress(addresses[row]))
-  lookupTable <- rbind.fill(lookupTable, newRow)
-}
-lookupTable <- lookupTable[,c(1:5)]
-saveRDS(lookupTable, "data/lookupTable.Rds")
+# addresses <- violations$address
+# addresses <- unique(addresses)
+# lookupTable <- c()
+# for(row in c(1:length(addresses))) {
+#   newRow <- cbind("address" = addresses[row], parsedAddress(addresses[row]))
+#   lookupTable <- rbind.fill(lookupTable, newRow)
+# }
+# lookupTable <- lookupTable[,c(1:5)]
+# saveRDS(lookupTable, "data/lookupTable.Rds")
 lookupTable <- readRDS("data/lookuptable.Rds")
 
 # ---------------------------------------------------------------------------- #
@@ -115,11 +115,11 @@ for (row in c(1:nrow(lookupTable))) {
 matches <- matches[!duplicated(matches$address),c("address","bldg_id")] 
 
 # add building identifier to the  violations dataset
-violations <- merge(violations, matches, by = "address")
+violations <- merge(violations, matches, by = "address", all.x = T)
 
 # create the feature and add it to building.geojson
 demo_last24mos <- violations@data[violations@data$department_bureau == "DEMOLITION" &
-                               as.Date(violations@data$violation_date) > as.Date("2015-04-24"),]
+                                    as.Date(violations@data$violation_date) > as.Date("2015-04-24"),]
 demo_last24mos <- count(demo_last24mos, "bldg_id")
 names(demo_last24mos)[2] <- "demo_last24mos"
 buildings <- merge(buildings, demo_last24mos, by="bldg_id")
@@ -134,24 +134,24 @@ leaflet() %>%
 #  Link Tax Shapes
 # ---------------------------------------------------------------------------- #
 
-matches <- data.table(matches)
-lookupTable <- data.table(lookupTable)
-unmatched <- fsetdiff(lookupTable[,"address"], matches[,"address"])
-unmatched <- violations[violations$address %in% unmatched$address,]
+unmatched <- is.na(violations$bldg_id)
+newMatches <- over(violations[unmatched,], taxShapes)
+violations[unmatched,"pin"] <- newMatches$pin10
 
-pipMatches <- over(unmatched, buildings)
-pipMatches <- pipMatches[!is.na(pipMatches$st_name1),]
-pipMatches <- unique(pipMatches)
-pipMatches <- violations[violations$address %in% pipMatches$address,]
+unmatched <- violations[unmatched,]
+unmatchedPIP <- violations[is.na(violations$bldg_id) & is.na(violations$pin),]
 
 popupCoords <- unmatched$address
+popupCoords1 <-paste0(buildings$f_add1, "-", buildings$t_add1, " ", buildings$pre_dir1,
+                      " ", buildings$st_name1, " ", buildings$st_type1)
+popupCoords2 <- unmatchedPIP$address
 
 leaflet() %>%
   addProviderTiles("CartoDB.Positron") %>%
   addPolygons(data = taxShapes, weight = 1) %>%
-  addPolygons(data = buildings, weight = 1, fillColor = "red") %>%
-  addCircles(data = unmatched, radius = 3, stroke = FALSE, fillOpacity = 1, fillColor = '#ff0000', popup = popupCoords)
-
+  addPolygons(data = buildings, weight = 1, fillColor = "red", popup = popupCoords1) %>%
+  addCircles(data = unmatched, radius = 3, stroke = FALSE, fillOpacity = 1, fillColor = '#ff0000', popup = popupCoords) %>%
+  addCircles(data = unmatchedPIP, radius = 3, stroke = FALSE, fillOpacity = 1, fillColor = "yellow", popup = popupCoords2)
 
 overlap <- cbind("pin" = taxShapes@data$pin10, 
                  over(taxShapes, 
@@ -209,4 +209,37 @@ leaflet() %>%
   addPolygons(data = min_first, weight = 1, fillColor = "red") %>%
   addPolygons(data = first_median, weight = 1, fillColor = "blue") %>%
   addPolygons(data = median_plus, weight = 1, fillColor = "yellow") 
+
+
+## ASSIGN PINS TO BUILDINGS
+## PUT PINS IN THE BUILDINGS GEOJSON FILE
+
+# (1) For a given building, identify how many tax parcels it overlaps
+# (2) For each tax parcel, find the area of that overlap
+# (3) Take the area of the overlap from the parcel with the largest overlap. 
+#       Find the area of all of the other parcels' overlaps as a percentage of that 
+#       largest one. Then set an arbitrary threshold. If the percentage falls under 
+#       the threshold, assume they are unrelated.
+
+bldg_ids <- unique(test$bldg_id)
+bldgList <- list()
+buildings$pins <- NA
+for (i in c(1:length(bldg_ids))) {
+  bldgList[[i]] <- list(bldg_id = bldg_ids[i])
+  pins <- test@data[test$bldg_id == bldg_ids[i],
+                    "pin10"]
+  bldgList[[i]]$pins <- pins
+  area <- test@data[test$pin10 %in% pins & 
+                      test$bldg_id == bldg_ids[i],
+                    "area"]
+  bldgList[[i]]$area <- area
+  areaSum <- sum(area)
+  areaRatio <- area / areaSum
+  bldgList[[i]]$areaRatio <- areaRatio
+  pinIndex <- which(areaRatio > .05)
+  pinsFinal <- pins[pinIndex]
+  bldgList[[i]]$pinsFinal <- pinsFinal
+  buildings@data[buildings$bldg_id == bldg_ids[i],]$pins <- list(t(pinsFinal))
+}
+
 
