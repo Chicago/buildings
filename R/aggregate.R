@@ -1,3 +1,6 @@
+rm(list=ls())
+dev.off(dev.list()["RStudioGD"])
+
 # ---------------------------------------------------------------------------- #
 #  A script to add features and aggregate data for Chicago buildings
 # 
@@ -119,13 +122,6 @@ matches <- matches[!duplicated(matches$address),c("address","bldg_id")]
 # add building identifier to the  violations dataset
 violations <- merge(violations, matches, by = "address", all.x = T)
 
-# create the feature and add it to building.geojson
-demo_last24mos <- violations@data[violations@data$department_bureau == "DEMOLITION" &
-                                    as.Date(violations@data$violation_date) > as.Date("2015-04-24"),]
-demo_last24mos <- count(demo_last24mos, "bldg_id")
-names(demo_last24mos)[2] <- "demo_last24mos"
-buildings <- merge(buildings, demo_last24mos, by="bldg_id")
-
 # ---------------------------------------------------------------------------- #
 #  Link Tax Shapes
 # ---------------------------------------------------------------------------- #
@@ -239,8 +235,8 @@ for (i in c(1:length(bldg_ids))) {
 }
 
 # ---------------------------------------------------------------------------- #
-#  Add tax delinquencies
-#  Condos are getting counted multiple times (Need to address, but OK now)     
+#  Add features
+#    when doing PIN matching, Condos are getting counted multiple times (Need to address, but OK now)     
 # ---------------------------------------------------------------------------- #
 
 # create the feature and add it to building.geojson
@@ -248,33 +244,108 @@ for (i in c(1:length(bldg_ids))) {
 # createFeature(data) # columns: bldg_id or pin, date of event
 # addFeature(buildings, feature, matchType = "bldg_id" or "pin", name)
 
-taxsales_last24mos <- tax_sales[tax_sales$tax_sale_year %in% c(2014,2015),]
-taxsales_last24mos <- count(taxsales_last24mos, "pin") 
-names(taxsales_last24mos)[2] <- "taxsales_last24mos"
-buildings$taxsales_last24mos <- 0
-for (i in c(1:length(bldgList))) {
-  pins <- bldgList[[i]]$pinsFinal
-  n <- 0
-  for (j in 1:length(pins)) {
-    found <- taxsales_last24mos[taxsales_last24mos$pin == pins[j],
-                                "taxsales_last24mos"] 
-    if (length(found) > 0) {
-      n <- n + found
-    }
-  } 
-  bldgList[[i]]$taxsales_last24mos <- n
-  bid <- bldgList[[i]]$bldg_id
-  buildings@data[buildings$bldg_id == bid,]$taxsales_last24mos <- n
+
+## createFeature expects a data.frame with a list of events, e.g. inspections
+## the data needs to have two columns: 1) bldg_id or pin and 2) date of event
+## returns a "feature" that can be fed into addFeature
+createFeature <- function(df) {
+  ## TODO write tests to make sure data is in proper format
+  ## TODO handle errors with descriptions of the problem
+  if ("pin" %in% names(df)) {
+    result <- count(df, "pin") 
+  }
+  if ("bldg_id" %in% names(df)) {
+    result <- count(df, "bldg_id") 
+  }
+  return(result)
 }
 
-# map out "bad buildings" using the new feature
-bad_buildings <- buildings[!is.na(buildings$demo_last24mos) & buildings$demo_last24mos > 0,]
+addFeature <- function(bldgList, feature_df, feature_name) {
+  ## match by bldg_id if available, pin if not
+  if ("bldg_id" %in% names(feature_df)) {
+    matchType <- "bldg_id" 
+  } else if ("pin" %in% names(feature_df)) {
+    matchType <- "pin" 
+  } else stop("No bldg_id or pin found in feature_df, cannot match records to a building")
+  
+  if (matchType == "bldg_id") {
+    for (i in c(1:length(bldgList))) {
+      n <- 0
+      bldg_id <- bldgList[[i]]$bldg_id
+      found <- feature_df[feature_df$bldg_id == bldg_id,
+                          "freq"] 
+      if (length(found) > 0) {
+        n <- n + found
+      }
+      index <- length(bldgList[[i]])
+      bldgList[[i]][index+1] <- n
+      names(bldgList[[i]])[index+1] <- feature_name
+    }    
+    result <- bldgList
+  }
+  
+  if (matchType == "pin") {
+    for (i in c(1:length(bldgList))) {
+      pins <- bldgList[[i]]$pinsFinal
+      n <- 0
+      for (j in 1:length(pins)) {
+        found <- feature_df[feature_df$pin == pins[j],
+                            "freq"] 
+        if (length(found) > 0) {
+          n <- n + found
+        }
+      } 
+      index <- length(bldgList[[i]])
+      bldgList[[i]][index+1] <- n
+      names(bldgList[[i]])[index+1] <- feature_name
+    }    
+    result <- bldgList
+  }
+  
+  return(result)
+}
+
+taxsales_last24mos <- tax_sales[tax_sales$tax_sale_year %in% c(2014,2015),]
+newFeature <- createFeature(taxsales_last24mos)
+bldgList <- addFeature(bldgList, newFeature, "taxsales_last24mos")
+
+demo_last24mos <- violations@data[violations@data$department_bureau == "DEMOLITION" &
+                                    as.Date(violations@data$violation_date) > as.Date("2010-01-01") &
+                                    !is.na(violations@data$bldg_id),
+                                  c("bldg_id", "violation_date")]
+newFeature <- createFeature(demo_last24mos)
+bldgList <- addFeature(bldgList, newFeature, "demo_last24mos")
+
+demo_last24mosPIN <- violations@data[violations@data$department_bureau == "DEMOLITION" &
+                                       as.Date(violations@data$violation_date) > as.Date("2010-01-01") &
+                                       !is.na(violations@data$pin),
+                                     c("pin", "violation_date")]
+newFeature <- createFeature(demo_last24mosPIN)
+bldgList <- addFeature(bldgList, newFeature, "demo_last24mosPIN")
+
+## Add features back to buildings oj
+
+extractedFeatures <- lapply(bldgList, function(x) {
+  data.frame("bldg_id" = x$bldg_id, 
+             "taxsales_last24mos" = x$taxsales_last24mos, 
+             "demo_last24mos" = x$demo_last24mos,
+             "demo_last24mosPIN" = x$demo_last24mosPIN,
+             stringsAsFactors = FALSE)
+})
+extractedFeatures <- do.call("rbind", extractedFeatures)
+buildings <- merge(buildings, extractedFeatures, by = "bldg_id", all.x = TRUE)
+
+# map out "troubled buildings" using the new feature
+bad_buildings <- buildings[(buildings$demo_last24mos > 0 | buildings$demo_last24mosPIN > 0),]
 tax_sales <- buildings[buildings$taxsales_last24mos > 0,]
 popup1 <- paste0(bad_buildings$f_add1, "-", bad_buildings$t_add1, " ", bad_buildings$pre_dir1,
-                 " ", bad_buildings$st_name1, " ", bad_buildings$st_type1)
+                 " ", bad_buildings$st_name1, " ", bad_buildings$st_type1, "<br>",
+                 bad_buildings$pins)
 popup2 <- paste0(tax_sales$f_add1, "-", tax_sales$t_add1, " ", tax_sales$pre_dir1,
-                 " ", tax_sales$st_name1, " ", tax_sales$st_type1)
+                 " ", tax_sales$st_name1, " ", tax_sales$st_type1, "<br>",
+                 tax_sales$pins)
 leaflet() %>%
   addProviderTiles("CartoDB.Positron") %>%
   addPolygons(data = bad_buildings, weight = 1, fillColor = "red", popup = popup1) %>%
   addPolygons(data = tax_sales, weight = 1, fillColor = "yellow", popup = popup2)
+
