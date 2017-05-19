@@ -22,17 +22,17 @@ library(stringr)
 
 matchAddress <- function(footprintAddresses, addNum, preDir, street, postType) {
   addNum <- as.numeric(addNum)
-  odd <- footprintAddresses[(footprintAddresses$label_hous %% 2) == 1,]
-  even <- footprintAddresses[(footprintAddresses$label_hous %% 2) == 0,]
+  odd <- footprintAddresses[(footprintAddresses$f_add1 %% 2) == 1,]
+  even <- footprintAddresses[(footprintAddresses$f_add1 %% 2) == 0,]
   if ((addNum %% 2 == 1)) {
-    addressMatch <- odd[odd$label_hous <= addNum &
+    addressMatch <- odd[odd$f_add1 <= addNum &
                           odd$t_add1 >= addNum &
                           toupper(odd$pre_dir1) == toupper(preDir) &
                           toupper(odd$st_name1) == toupper(street) &
                           toupper(odd$st_type1) == toupper(postType)
                         ,]
   } else {
-    addressMatch <- even[even$label_hous <= addNum &
+    addressMatch <- even[even$f_add1 <= addNum &
                            even$t_add1 >= addNum &
                            toupper(even$pre_dir1) == toupper(preDir) &
                            toupper(even$st_name1) == toupper(street) &
@@ -49,8 +49,8 @@ matchAddress <- function(footprintAddresses, addNum, preDir, street, postType) {
 parsedAddress <- function(addr) {
   addr <- gsub(" ", ",", addr)
   args <- c('py/address-parser.py',addr)
-  system2("python3.5", args, stdout=TRUE) #macbook
-  # system2("python", args, stdout=TRUE)
+  # system2("python3.5", args, stdout=TRUE) #macbook
+  system2("python", args, stdout=TRUE)
   parsed <- read.csv("parsed.csv", header = FALSE)
   parsed$V1 <- gsub("]","",parsed$V1)
   parsed$V1 <- gsub(",","",parsed$V1)
@@ -63,6 +63,30 @@ parsedAddress <- function(addr) {
   return(as.data.frame(parsed))
 }
 
+stateplane2latlon <- function(X, Y, metric=FALSE){
+  # latlon <- data.table(longitude = c(1148703.5804669, 1148721.69534794,
+  #                                    1148718.58006945, 1148719.92031838,
+  #                                    1148722.28519294),
+  #                      latitude = c(1938916.16105645, 1938209.79458671,
+  #                                   1938315.99708976, 1938270.3270949,
+  #                                   1938189.60711051))
+  # browser()
+  latlon <- data.table(longitude = X, latitude = Y)
+  ii <- apply(latlon, 1, function(x) !any(is.na(x)))
+  latlon <- latlon[ii]
+  coordinates(latlon) <- c("longitude", "latitude")
+  if(metric){
+    proj4string(latlon) <- CRS("+init=epsg:3529 +units=ft")
+  } else {
+    proj4string(latlon) <- CRS("+init=epsg:3529 +units=us-ft")
+  }
+  latlon <- coordinates(spTransform(latlon, CRS("+proj=longlat +datum=WGS84")))
+  ret <- data.table(X, Y)
+  ret <- ret[ii, latitude := coordinates(latlon)[ , 'latitude']][]
+  ret <- ret[ii, longitude := coordinates(latlon)[ , 'longitude']][]
+  return(ret)
+}
+
 # ---------------------------------------------------------------------------- #
 #  Import Data
 # ---------------------------------------------------------------------------- #
@@ -71,6 +95,7 @@ source("R/buildings.R")
 source("R/violations.R")
 source("R/tax-parcels.R")
 source("R/tax-delinquencies.R")
+source("R/vacant-311.R")
 
 # ---------------------------------------------------------------------------- #
 #  Clean addresses using DataMade's python parser (very slow)
@@ -95,8 +120,8 @@ lookupTable <- readRDS("data/lookuptable.Rds")
 ## Demo is being added as total violations, not inspections
 
 # extract addresses from building.geojson
-footprintAddresses <- buildings@data[,c("bldg_id","label_hous","t_add1","pre_dir1","st_name1","st_type1")]
-footprintAddresses$label_hous <- as.numeric(footprintAddresses$label_hous)
+footprintAddresses <- buildings@data[,c("bldg_id","f_add1","t_add1","pre_dir1","st_name1","st_type1")]
+footprintAddresses$f_add1 <- as.numeric(footprintAddresses$f_add1)
 footprintAddresses$t_add1 <- as.numeric(footprintAddresses$t_add1)
 footprintAddresses <- footprintAddresses[complete.cases(footprintAddresses),]
 
@@ -116,11 +141,45 @@ for (row in c(1:nrow(lookupTable))) {
   rm(list = c("newRow","newMatch","row"))
 }
 
-# remove coach houses, etc.
-matches <- matches[!duplicated(matches$address),c("address","bldg_id")] 
+# match the cleaned addresses from vacant buildings to the extracted building addresses
+matchesVacant <- c()
+for (row in c(1:nrow(vacant))) {
+  newMatch <- matchAddress(footprintAddresses,
+                           vacant@data$address_street_number[row],
+                           vacant@data$address_street_direction[row],
+                           vacant@data$address_street_name[row],
+                           vacant@data$address_street_suffix[row])
+  if (nrow(newMatch) == 0) next
+  newRow <- cbind(vacant@data[row,1:4],
+                  newMatch,
+                  row.names = NULL)
+  matchesVacant <- rbind(matchesVacant, newRow)
+  rm(list = c("newRow","newMatch","row"))
+}
 
-# add building identifier to the  violations dataset
+# remove coach houses, etc.
+matches <- matches[!duplicated(matches$address),c("address","bldg_id")]
+
+# remove duplicates
+matchesVacant <- unique(matchesVacant[,c("address_street_number",
+                                         "address_street_direction",
+                                         "address_street_name",
+                                         "address_street_suffix",
+                                         "bldg_id")])
+
+# add building identifier to the datasets
 violations <- merge(violations, matches, by = "address", all.x = T)
+vacant <- merge(vacant, matchesVacant,
+                by.x = c("address_street_number",
+                         "address_street_direction",
+                         "address_street_name",
+                         "address_street_suffix"),
+                by.y = c("address_street_number",
+                         "address_street_direction",
+                         "address_street_name",
+                         "address_street_suffix"), 
+                
+                all.x = T)
 
 # ---------------------------------------------------------------------------- #
 #  Link Tax Shapes
@@ -143,7 +202,7 @@ leaflet() %>%
   addPolygons(data = taxShapes, weight = 1) %>%
   addPolygons(data = buildings, weight = 1, fillColor = "red", popup = popupCoords1) %>%
   addCircles(data = unmatched, radius = 3, stroke = FALSE, fillOpacity = 1, fillColor = '#ff0000', popup = popupCoords) %>%
-  addCircles(data = unmatchedPIP, radius = 3, stroke = FALSE, fillOpacity = 1, fillColor = "yellow", popup = popupCoords2)
+  addCircles(data = unmatchedPIP, radius = 3, stroke = FALSE, fillOpacity = 1, fillColor = "yellow", popup = popupCoords2) 
 
 overlap <- cbind("pin" = taxShapes@data$pin10, 
                  over(taxShapes, 
@@ -323,6 +382,12 @@ demo_last24mosPIN <- violations@data[violations@data$department_bureau == "DEMOL
 newFeature <- createFeature(demo_last24mosPIN)
 bldgList <- addFeature(bldgList, newFeature, "demo_last24mosPIN")
 
+vacant311 <- vacant@data[as.Date(vacant@data$date_service_request_was_received) > as.Date("2010-01-01") &
+                           !is.na(vacant@data$bldg_id),
+                         c("bldg_id", "date_service_request_was_received")]
+newFeature <- createFeature(vacant311)
+bldgList <- addFeature(bldgList, newFeature, "vacant311")
+
 ## Add features back to buildings oj
 
 extractedFeatures <- lapply(bldgList, function(x) {
@@ -330,6 +395,7 @@ extractedFeatures <- lapply(bldgList, function(x) {
              "taxsales_last24mos" = x$taxsales_last24mos, 
              "demo_last24mos" = x$demo_last24mos,
              "demo_last24mosPIN" = x$demo_last24mosPIN,
+             "vacant311" = x$vacant311,
              stringsAsFactors = FALSE)
 })
 extractedFeatures <- do.call("rbind", extractedFeatures)
@@ -338,14 +404,20 @@ buildings <- merge(buildings, extractedFeatures, by = "bldg_id", all.x = TRUE)
 # map out "troubled buildings" using the new feature
 bad_buildings <- buildings[(buildings$demo_last24mos > 0 | buildings$demo_last24mosPIN > 0),]
 tax_sales <- buildings[buildings$taxsales_last24mos > 0,]
+vacant_calls <- buildings[buildings$vacant311 > 0,]
 popup1 <- paste0(bad_buildings$f_add1, "-", bad_buildings$t_add1, " ", bad_buildings$pre_dir1,
                  " ", bad_buildings$st_name1, " ", bad_buildings$st_type1, "<br>",
                  bad_buildings$pins)
 popup2 <- paste0(tax_sales$f_add1, "-", tax_sales$t_add1, " ", tax_sales$pre_dir1,
                  " ", tax_sales$st_name1, " ", tax_sales$st_type1, "<br>",
                  tax_sales$pins)
+popup3 <- paste0(vacant_calls$f_add1, "-", vacant_calls$t_add1, " ", vacant_calls$pre_dir1,
+                 " ", vacant_calls$st_name1, " ", vacant_calls$st_type1, "<br>",
+                 vacant_calls$pins)
+
 leaflet() %>%
   addProviderTiles("CartoDB.Positron") %>%
-  addPolygons(data = bad_buildings, weight = 1, fillColor = "red", popup = popup1) %>%
-  addPolygons(data = tax_sales, weight = 1, fillColor = "yellow", popup = popup2)
+  addPolygons(data = vacant_calls, weight = 0, opacity = 1, fillColor = "purple", popup = popup3) %>%
+  addPolygons(data = bad_buildings, weight = 0, opacity = 1, fillColor = "red", popup = popup1) %>%
+  addPolygons(data = tax_sales, weight = 0, opacity = .05, fillColor = "yellow", popup = popup2) 
 
