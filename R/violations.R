@@ -2,24 +2,31 @@
 #  Import all building violations
 # ---------------------------------------------------------------------------- #
 
-# violations <-
-#   read.socrata("https://data.cityofchicago.org/resource/ucdv-yd74.json")
+## read in CSV downloaded from data portal
+
+# violations <- read.csv("data/Building_Violations.csv", stringsAsFactors = FALSE)
+
+## remove prior geocoding
+
+# violations$LATITUDE <- NULL
+# violations$LONGITUDE <- NULL
+# violations$LOCATION <- NULL
+
+## export for geocoding (geocoding is manual step)
+
+# write.csv(violations, "building-violations-to-geocode-data-science.csv", row.names = FALSE)
+
+## import geocoded file
+
+# violations <- read.csv("Results_Job74347_building-violations-to-geocode-data-science.csv", stringsAsFactors = FALSE)
+
+# violations$VIOLATION.DATE <- as.Date(violations$VIOLATION.DATE, format="%m/%d/%Y")
 
 # ---------------------------------------------------------------------------- #
 #  CONVERT VIOLATIONS TO SPATIAL DATA FRAME
 # ---------------------------------------------------------------------------- #
 
-# violations$longitude <- as.numeric(violations$longitude)
-# violations$latitude <- as.numeric(violations$latitude)
-# violations <- violations[complete.cases(violations[c("address","longitude",
-#                                                      "latitude")]),]
-# rownames(violations) <- seq(length=nrow(violations))
-# violations <- SpatialPointsDataFrame(coords =
-#                                        SpatialPoints(violations[,c("longitude",
-#                                                                    "latitude")]),
-#                                      data = as.data.frame(violations,
-#                                                           stringsAsFactors = FALSE))
-# proj4string(violations) <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
+# violations <- toSpatial(violations)
 
 # ---------------------------------------------------------------------------- #
 #  DRILL DOWN TO A FEW CENSUS TRACTS FOR FASTER COMPUTATION 
@@ -28,6 +35,7 @@
 # tracts <- readOGR(dsn="data/tracts.geojson", layer="OGRGeoJSON", stringsAsFactors = FALSE)
 # # tractsList <- c("2424","2423","2422","2421","2420","2429","2430","2431","2432",
 # #                 "2433")
+# tracts <- spTransform(tracts, CRS("+init=epsg:4326"))
 # tractsList <- c("2608")
 # tracts <- tracts[tracts$name10 %in% tractsList,]
 # violations_df <- over(violations, tracts)
@@ -41,5 +49,3 @@
 # ---------------------------------------------------------------------------- #
 
 violations <- readRDS("data/violations-small.Rds")
-violations <- spTransform(violations, CRS("+init=epsg:4326"))
-

@@ -20,10 +20,14 @@ library(stringr)
 #  address
 # ---------------------------------------------------------------------------- #
 
-matchAddress <- function(footprintAddresses, addNum, preDir, street, postType) {
+matchAddress <- function(buildings, addNum, preDir, street, postType) {
+  addresses <- buildings@data[,c("bldg_id","f_add1","t_add1","pre_dir1","st_name1","st_type1")]
+  addresses$f_add1 <- as.numeric(addresses$f_add1)
+  addresses$t_add1 <- as.numeric(addresses$t_add1)
+  addresses <- addresses[complete.cases(addresses),]
   addNum <- as.numeric(addNum)
-  odd <- footprintAddresses[(footprintAddresses$f_add1 %% 2) == 1,]
-  even <- footprintAddresses[(footprintAddresses$f_add1 %% 2) == 0,]
+  odd <- addresses[(addresses$f_add1 %% 2) == 1,]
+  even <- addresses[(addresses$f_add1 %% 2) == 0,]
   if ((addNum %% 2 == 1)) {
     addressMatch <- odd[odd$f_add1 <= addNum &
                           odd$t_add1 >= addNum &
@@ -119,16 +123,11 @@ lookupTable <- readRDS("data/lookuptable.Rds")
 ## still need to deal with multiple houses on one property (merge error)
 ## Demo is being added as total violations, not inspections
 
-# extract addresses from building.geojson
-footprintAddresses <- buildings@data[,c("bldg_id","f_add1","t_add1","pre_dir1","st_name1","st_type1")]
-footprintAddresses$f_add1 <- as.numeric(footprintAddresses$f_add1)
-footprintAddresses$t_add1 <- as.numeric(footprintAddresses$t_add1)
-footprintAddresses <- footprintAddresses[complete.cases(footprintAddresses),]
 
 # match the cleaned addresses from violations to the extracted building addresses
 matches <- c()
 for (row in c(1:nrow(lookupTable))) {
-  newMatch <- matchAddress(footprintAddresses,
+  newMatch <- matchAddress(buildings,
                            lookupTable$AddressNumber[row],
                            lookupTable$StreetNamePreDirectional[row],
                            lookupTable$StreetName[row],
@@ -144,7 +143,7 @@ for (row in c(1:nrow(lookupTable))) {
 # match the cleaned addresses from vacant buildings to the extracted building addresses
 matchesVacant <- c()
 for (row in c(1:nrow(vacant))) {
-  newMatch <- matchAddress(footprintAddresses,
+  newMatch <- matchAddress(buildings,
                            vacant@data$address_street_number[row],
                            vacant@data$address_street_direction[row],
                            vacant@data$address_street_name[row],
