@@ -66,7 +66,7 @@ demoPIN <- violations@data[violations@data$DEPARTMENT.BUREAU == "DEMOLITION" &
 newFeature <- createFeature(demoPIN)
 bldgList <- addFeature(bldgList, newFeature, "demoPIN")
 
-## add 311 vacant/abandond building reports (by building)
+## add 311 vacant/abandoned building reports (by building)
 
 vacant311Bldg <- vacant@data[as.Date(vacant@data$date_service_request_was_received) > as.Date("2010-01-01") &
                            !is.na(vacant@data$bldg_id),
@@ -74,11 +74,11 @@ vacant311Bldg <- vacant@data[as.Date(vacant@data$date_service_request_was_receiv
 newFeature <- createFeature(vacant311Bldg)
 bldgList <- addFeature(bldgList, newFeature, "vacant311Bldg")
 
-## add 311 vacant/abandond building reports (by PIN)
+## add 311 vacant/abandoned building reports (by PIN)
 
 vacant311PIN <- vacant@data[as.Date(vacant@data$date_service_request_was_received) > as.Date("2010-01-01") &
-                              !is.na(vacant@data$bldg_id),
-                            c("bldg_id", "date_service_request_was_received")]
+                              !is.na(vacant@data$pin),
+                            c("pin", "date_service_request_was_received")]
 newFeature <- createFeature(vacant311PIN)
 bldgList <- addFeature(bldgList, newFeature, "vacant311PIN")
 
