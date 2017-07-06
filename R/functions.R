@@ -20,6 +20,7 @@ initBldgList <- function(buildings, taxShapes) {
     pinsFinal <- pins[pinIndex]
     bldgList[[i]]$pinsFinal <- pinsFinal
   }
+  rm(overlap)
   return(bldgList)
 }
   
@@ -138,8 +139,14 @@ link <- function(data, buildings, taxShapes, nameNum, namePre, nameStreet, nameT
                        namePre,
                        nameStreet,
                        nameType)
-  linked2 <- linkByPIP(linked1, taxShapes)
-  return(linked2)
+  bldg_idNAs <- sum(is.na(linked1$bldg_id))
+  if (bldg_idNAs > 0) {
+    linked2 <- linkByPIP(linked1, taxShapes)
+    return(linked2)
+  } else {
+    linked1$pin <- NA
+    return(linked1)
+  }
 }
 
 toSpatial <- function(incoming) {
@@ -217,4 +224,19 @@ addFeature <- function(bldgList, feature_df, feature_name) {
   }
   
   return(result)
+}
+
+writeTracts <- function(spatialData, tracts, description) {
+  tractsList <- tracts$name10
+  sapply(tractsList, function(x) {
+    tract <- tracts[tracts$name10 == x,]
+    spatialData_df <- over(spatialData, tract)
+    spatialData_df <- spatialData_df[complete.cases(spatialData_df),]
+    rowNums <- as.numeric(rownames(spatialData_df))
+    spatialData <- spatialData[c(rowNums),]
+    writeOGR(spatialData,
+             paste0("data/byTract/", description, "/", x,".geojson"),
+             layer = "OGRGeoJSON",
+             driver = "GeoJSON")
+  })
 }

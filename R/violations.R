@@ -3,6 +3,7 @@
 # ---------------------------------------------------------------------------- #
 
 ## read in CSV downloaded from data portal
+## tractToPass (incoming variable) 
 
 # violations <- read.csv("data/Building_Violations.csv", stringsAsFactors = FALSE)
 
@@ -19,33 +20,29 @@
 ## import geocoded file
 
 # violations <- read.csv("Results_Job74347_building-violations-to-geocode-data-science.csv", stringsAsFactors = FALSE)
-
+# 
 # violations$VIOLATION.DATE <- as.Date(violations$VIOLATION.DATE, format="%m/%d/%Y")
-
-# ---------------------------------------------------------------------------- #
-#  CONVERT VIOLATIONS TO SPATIAL DATA FRAME
-# ---------------------------------------------------------------------------- #
-
+# violations <- violations[!is.na(violations$HOUSE_LOW),]
+# 
+# # ---------------------------------------------------------------------------- #
+# #  CONVERT VIOLATIONS TO SPATIAL DATA FRAME
+# # ---------------------------------------------------------------------------- #
+# 
 # violations <- toSpatial(violations)
 
 # ---------------------------------------------------------------------------- #
-#  DRILL DOWN TO A FEW CENSUS TRACTS FOR FASTER COMPUTATION 
+#  Create a geojson file for each census tract 
 # ---------------------------------------------------------------------------- #
 
-# tracts <- readOGR(dsn="data/tracts.geojson", layer="OGRGeoJSON", stringsAsFactors = FALSE)
-# # tractsList <- c("2424","2423","2422","2421","2420","2429","2430","2431","2432",
-# #                 "2433")
-# tracts <- spTransform(tracts, CRS("+init=epsg:4326"))
-# tractsList <- c("2608")
-# tracts <- tracts[tracts$name10 %in% tractsList,]
-# violations_df <- over(violations, tracts)
-# violations_df <- violations_df[complete.cases(violations_df),]
-# rowNums <- as.numeric(rownames(violations_df))
-# violations <- violations[c(rowNums),]
-# saveRDS(violations, "data/violations-small.Rds")
+# writeTracts(spatialData = violations,
+#             tracts = tracts, 
+#            description = "violations")
 
 # ---------------------------------------------------------------------------- #
-#  Read small Rds file
+#  Read file
 # ---------------------------------------------------------------------------- #
 
-violations <- readRDS("data/violations-small.Rds")
+path <- paste0("data/byTract/violations/", tractToPass,".geojson")
+violations <- readOGR(path, layer="OGRGeoJSON",
+                      stringsAsFactors = FALSE)
+violations <- spTransform(violations, CRS("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5 +lon_0=-96"))

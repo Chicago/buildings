@@ -2,29 +2,39 @@
 #  Import all Chicago building data
 # ---------------------------------------------------------------------------- #
 
+## tractToPass (incoming variable) 
+
 # buildings <- readOGR(dsn="data/Buildings.geojson", stringsAsFactors = FALSE)
 
 # ---------------------------------------------------------------------------- #
-#  DRILL DOWN TO A FEW CENSUS TRACTS FOR FASTER COMPUTATION 
+#  Create a geojson file for each census tract 
 # ---------------------------------------------------------------------------- #
 
-# tracts <- readOGR(dsn="data/tracts.geojson", layer="OGRGeoJSON",
-#                   stringsAsFactors = FALSE)
-# # tractsList <- c("2424","2423","2422","2421","2420","2429","2430","2431","2432",
-# #                 "2433")
-# tractsList <- c("2608")
-# tracts <- tracts[tracts$name10 %in% tractsList,]
-# buildings_df <- over(buildings, tracts)
-# buildings_df <- buildings_df[complete.cases(buildings_df),]
-# rowNums <- as.numeric(rownames(buildings_df))
-# buildings <- buildings[c(rowNums),]
-# writeOGR(buildings, "data/buildings-small.geojson",layer="OGRGeoJSON",
-#          driver="GeoJSON")
+# writeTracts(spatialData = buildings, 
+#             tracts = tracts, 
+#             description = "buildings")
 
 # ---------------------------------------------------------------------------- #
-#  Read small geojson file
+#  Read file
 # ---------------------------------------------------------------------------- #
 
-buildings <- readOGR("data/buildings-small.geojson", layer="OGRGeoJSON",
+path <- paste0("data/byTract/buildings/", tractToPass,".geojson")
+buildings <- readOGR(path, layer="OGRGeoJSON",
                      stringsAsFactors = FALSE)
-buildings <- spTransform(buildings, CRS("+init=epsg:4326"))
+
+# following fixes https://gis.stackexchange.com/questions/163445/r-solution-for-topologyexception-input-geom-1-is-invalid-self-intersection-er
+
+buildings <- spTransform(buildings, 
+                         CRS("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5 +lon_0=-96"))
+
+# simplify the polgons a tad (tweak 0.00001 to your liking)
+buildings_df <- buildings@data
+buildings <- gSimplify(buildings, tol = 0.00001)
+buildings <- SpatialPolygonsDataFrame(buildings, buildings_df)
+
+# this is a well known R / GEOS hack (usually combined with the above) to 
+# deal with "bad" polygons
+buildings <- gBuffer(buildings, byid=TRUE, width=0)
+
+# any bad polys?
+sum(gIsValid(buildings, byid=TRUE)==FALSE)

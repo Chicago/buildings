@@ -1,45 +1,48 @@
 # ---------------------------------------------------------------------------- #
-#  Import all 311-reported building vacancies
+#  Import all 311 call for vacant buildings
 # ---------------------------------------------------------------------------- #
 
-# vacant <-
-#   read.socrata("https://data.cityofchicago.org/resource/yama-9had.json")
+## read in CSV downloaded from data portal
+## ALREADY GEOCODED
+## tractToPass (incoming variable) 
+
+# vacant311 <- read.csv("Results_Job75263_CSR-311-calls.csv", stringsAsFactors = FALSE)
+
+## remove prior lat/long
+
+# vacant311$LATITUDE <- NULL
+# vacant311$LONGITUDE <- NULL
+# vacant311$Location <- NULL
+# vacant311$X.COORDINATE <- NULL
+# vacant311$Y.COORDINATE <- NULL
+# 
+# vacant311$DATE.SERVICE.REQUEST.WAS.RECEIVED <- as.Date(vacant311$DATE.SERVICE.REQUEST.WAS.RECEIVED, format="%m/%d/%Y")
+# vacant311 <- vacant311[!is.na(vacant311$HOUSE_LOW),]
 
 # ---------------------------------------------------------------------------- #
-#  CONVERT VIOLATIONS TO SPATIAL DATA FRAME
+#  CONVERT TO SPATIAL DATA FRAME
 # ---------------------------------------------------------------------------- #
 
-# vacant$longitude <- as.numeric(vacant$longitude)
-# vacant$latitude <- as.numeric(vacant$latitude)
-# vacant <- vacant[complete.cases(vacant[c("address_street_name","longitude",
-#                                          "latitude")]),]
-# rownames(vacant) <- seq(length=nrow(vacant))
-# vacant <- SpatialPointsDataFrame(coords =
-#                                    SpatialPoints(vacant[,c("longitude",
-#                                                            "latitude")]),
-#                                  data = as.data.frame(vacant,
-#                                                       stringsAsFactors = FALSE))
-# proj4string(vacant) <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
+# vacant311 <- toSpatial(vacant311)
 
 # ---------------------------------------------------------------------------- #
-#  DRILL DOWN TO A FEW CENSUS TRACTS FOR FASTER COMPUTATION 
+#  Create a geojson file for each census tract 
 # ---------------------------------------------------------------------------- #
 
-# tracts <- readOGR(dsn="data/tracts.geojson", layer="OGRGeoJSON", stringsAsFactors = FALSE)
-# # tractsList <- c("2424","2423","2422","2421","2420","2429","2430","2431","2432",
-# #                 "2433")
-# tractsList <- c("2608")
-# tracts <- tracts[tracts$name10 %in% tractsList,]
-# vacant_df <- over(vacant, tracts)
-# vacant_df <- vacant_df[complete.cases(vacant_df),]
-# rowNums <- as.numeric(rownames(vacant_df))
-# vacant <- vacant[c(rowNums),]
-# saveRDS(vacant, "data/vacant-small.Rds")
+# writeTracts(spatialData = vacant311,
+#             tracts = tracts,
+#             description = "vacant311")
 
 # ---------------------------------------------------------------------------- #
-#  Read small Rds file
+#  Read file
 # ---------------------------------------------------------------------------- #
 
-vacant <- readRDS("data/vacant-small.Rds")
-vacant <- spTransform(vacant, CRS("+init=epsg:4326"))
-
+path <- paste0("data/byTract/vacant311/", tractToPass,".geojson")
+vacant <- try(readOGR(path, layer="OGRGeoJSON",
+                      stringsAsFactors = FALSE), silent = TRUE)
+if (class(vacant) == "try-error") {
+  warning(paste0("Could not read ", path))
+} else {
+  vacant <- spTransform(vacant, 
+                        CRS("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5 +lon_0=-96"))
+}
