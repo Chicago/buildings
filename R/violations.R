@@ -5,7 +5,7 @@
 ## read in CSV downloaded from data portal
 ## tractToPass (incoming variable) 
 
-# violations <- read.csv("data/Building_Violations.csv", stringsAsFactors = FALSE)
+# violations <- read.csv("data/csv/Building_Violations.csv", stringsAsFactors = FALSE)
 
 ## remove prior geocoding
 
@@ -15,11 +15,11 @@
 
 ## export for geocoding (geocoding is manual step)
 
-# write.csv(violations, "building-violations-to-geocode-data-science.csv", row.names = FALSE)
+# write.csv(violations, "data/csv/building-violations-to-geocode-data-science.csv", row.names = FALSE)
 
 ## import geocoded file
 
-# violations <- read.csv("Results_Job74347_building-violations-to-geocode-data-science.csv", stringsAsFactors = FALSE)
+# violations <- read.csv("gitexclude/Results_Job74347_building-violations-to-geocode-data-science.csv", stringsAsFactors = FALSE)
 # 
 # violations$VIOLATION.DATE <- as.Date(violations$VIOLATION.DATE, format="%m/%d/%Y")
 # violations <- violations[!is.na(violations$HOUSE_LOW),]

@@ -23,6 +23,6 @@
 # ---------------------------------------------------------------------------- #
 
 
-# saveRDS(tax_sales, "data/tax-sales.Rds")
-tax_sales <- readRDS("data/tax-sales.Rds")
+# saveRDS(tax_sales, "data/Rds/tax-sales.Rds")
+tax_sales <- readRDS("data/Rds/tax-sales.Rds")
 

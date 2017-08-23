@@ -6,7 +6,7 @@
 ## ALREADY GEOCODED
 ## tractToPass (incoming variable) 
 
-# vacant311 <- read.csv("Results_Job75263_CSR-311-calls.csv", stringsAsFactors = FALSE)
+# vacant311 <- read.csv("data/csv/Results_Job75263_CSR-311-calls.csv", stringsAsFactors = FALSE)
 
 ## remove prior lat/long
 

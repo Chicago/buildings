@@ -4,7 +4,7 @@
 
 ## tractToPass (incoming variable) 
 
-# buildings <- readOGR(dsn="data/Buildings.geojson", stringsAsFactors = FALSE)
+# buildings <- readOGR(dsn="gitexclude/Buildings.geojson", stringsAsFactors = FALSE)
 
 # ---------------------------------------------------------------------------- #
 #  Create a geojson file for each census tract 

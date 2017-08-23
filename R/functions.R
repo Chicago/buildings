@@ -162,7 +162,7 @@ toSpatial <- function(incoming) {
                                        data = as.data.frame(incoming,
                                                             stringsAsFactors = FALSE))
   proj4string(incomingSP) <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
-  incomingSP <- spTransform(incomingSP, CRS("+init=epsg:4326"))
+  incomingSP <- spTransform(incomingSP, CRS("+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5 +lon_0=-96"))
   return(incomingSP)
 }
 

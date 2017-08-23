@@ -9,7 +9,7 @@
 
 ## tractToPass (incoming variable) 
 
-# taxShapes <- readOGR(dsn="data/parcels.geojson", layer="OGRGeoJSON", stringsAsFactors = FALSE)
+# taxShapes <- readOGR(dsn="gitexclude/parcels.geojson", layer="OGRGeoJSON", stringsAsFactors = FALSE)
 
 # ---------------------------------------------------------------------------- #
 #  Create a geojson file for each census tract 

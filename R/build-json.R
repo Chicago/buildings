@@ -114,8 +114,8 @@ for (i in 1:length(tractsList)) {
 #                           simplifyDataFrame = TRUE)
 #   combinedJSON <- rbind.fill(combinedJSON, singleJSON)
 # }
-# saveRDS(combinedJSON, "data/combinedJSON.Rds")
-combinedJSON <- readRDS("data/combinedJSON.Rds")
+# saveRDS(combinedJSON, "data/Rds/combinedJSON.Rds")
+combinedJSON <- readRDS("data/Rds/combinedJSON.Rds")
 ## deal with missing values
 combinedJSON[["vacant311Bldg"]] <- sapply(combinedJSON[["vacant311Bldg"]], function(x) {if (is.null(x)) 0 else x})
 combinedJSON[["vacant311PIN"]] <- sapply(combinedJSON[["vacant311PIN"]], function(x) {if (is.null(x)) 0 else x})
@@ -134,11 +134,11 @@ combinedJSON$vacant311PIN <- NULL
 combinedJSON <- merge(combinedJSON, buildings_df[,c("bldg_id", "address")], by = "bldg_id")
 combinedJSON <- combinedJSON[!combinedJSON$address == "0   ",]
 combinedJSON <- combinedJSON[!combinedJSON$address == "   ",]
-write(toJSON(combinedJSON, pretty = TRUE), "json/building.json")
+write(toJSON(combinedJSON, pretty = TRUE), "gitexclude/building.json")
 
 ## put features into buildings spatial object (for mapping)
 
-# buildings <- readOGR("data/Buildings.geojson", layer="OGRGeoJSON",
+# buildings <- readOGR("gitexclude/Buildings.geojson", layer="OGRGeoJSON",
 #                      stringsAsFactors = FALSE)
 # buildings <- spTransform(buildings, CRS("+init=epsg:4326"))
 # extractedFeatures <- lapply(bldgList, function(x) {
