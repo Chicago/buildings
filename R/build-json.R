@@ -100,7 +100,7 @@ for (i in 1:length(tractsList)) {
   }
   bldgList <- toJSON(bldgList)
   write(bldgList,
-        paste0("json/", tractToPass,".json"))
+        paste0("data/json/", tractToPass,".json"))
   rm(buildings)
   rm(taxShapes)
   rm(bldgList)
