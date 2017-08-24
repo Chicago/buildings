@@ -15,14 +15,14 @@
 # annual_sale$pin <- str_sub(annual_sale$pin, 0, -5) # convert to 10 digit PINs
 # scavenger_sale$pin <- gsub("-", "", scavenger_sale$pin)
 # scavenger_sale$pin <- str_sub(scavenger_sale$pin, 0, -5) # convert to 10 digit PINs
-# tax_sales <- rbind(annual_sale[,c("pin", "tax_sale_year")],
-#                    scavenger_sale[c("pin", "tax_sale_year")])
 
 # ---------------------------------------------------------------------------- #
-#  Save/Read Rds File
+#  Save/Read Rds Files
 # ---------------------------------------------------------------------------- #
 
 
-# saveRDS(tax_sales, "data/Rds/tax-sales.Rds")
-tax_sales <- readRDS("data/Rds/tax-sales.Rds")
+# saveRDS(annual_sale, "data/Rds/annual-tax-sales.Rds")
+# saveRDS(scavenger_sale, "data/Rds/scavenger-tax-sales.Rds")
 
+annual_sale <- readRDS("data/Rds/annual-tax-sales.Rds")
+scavenger_sale <- readRDS("data/Rds/scavenger-tax-sales.Rds")

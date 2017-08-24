@@ -178,14 +178,17 @@ createFeature <- function(df) {
   if ("bldg_id" %in% names(df)) {
     result <- count(df, "bldg_id") 
   }
-  return(result)
+  return(list(result,
+              df))
 }
 
-addFeature <- function(bldgList, feature_df, feature_name) {
+addFeature <- function(bldgList, feature_list, feature_name) {
+  df_summary <- feature_list[[1]]
+  df_full <- feature_list[[2]]
   ## match by bldg_id if available, pin if not
-  if ("bldg_id" %in% names(feature_df)) {
+  if ("bldg_id" %in% names(df_summary)) {
     matchType <- "bldg_id" 
-  } else if ("pin" %in% names(feature_df)) {
+  } else if ("pin" %in% names(df_summary)) {
     matchType <- "pin" 
   } else stop("No bldg_id or pin found in feature_df, cannot match records to a building")
   
@@ -193,14 +196,14 @@ addFeature <- function(bldgList, feature_df, feature_name) {
     for (i in c(1:length(bldgList))) {
       n <- 0
       bldg_id <- bldgList[[i]]$bldg_id
-      found <- feature_df[feature_df$bldg_id == bldg_id,
+      found <- df_summary[df_summary$bldg_id == bldg_id,
                           "freq"] 
       if (length(found) > 0) {
         n <- n + found
       }
-      index <- length(bldgList[[i]])
-      bldgList[[i]][index+1] <- n
-      names(bldgList[[i]])[index+1] <- feature_name
+      rows <- df_full[df_full$bldg_id == bldg_id,]
+      bldgList[[i]][[paste0(feature_name, ".summary")]] <- n
+      bldgList[[i]][[feature_name]] <- rows  
     }    
     result <- bldgList
   }
@@ -209,16 +212,18 @@ addFeature <- function(bldgList, feature_df, feature_name) {
     for (i in c(1:length(bldgList))) {
       pins <- bldgList[[i]]$pinsFinal
       n <- 0
+      rows <- c()
       for (j in 1:length(pins)) {
-        found <- feature_df[feature_df$pin == pins[j],
+        found <- df_summary[df_summary$pin == pins[j],
                             "freq"] 
         if (length(found) > 0) {
           n <- n + found
         }
+        newRow <- df_full[df_full$pin == pins[j],]
+        rows <- rbind(rows, newRow)
       } 
-      index <- length(bldgList[[i]])
-      bldgList[[i]][index+1] <- n
-      names(bldgList[[i]])[index+1] <- feature_name
+      bldgList[[i]][[paste0(feature_name, ".summary")]] <- n
+      bldgList[[i]][[feature_name]] <- rows
     }    
     result <- bldgList
   }
