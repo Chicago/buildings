@@ -173,36 +173,80 @@ createFeature <- function(df) {
   ## TODO write tests to make sure data is in proper format
   ## TODO handle errors with descriptions of the problem
   if ("pin" %in% names(df)) {
-    result <- count(df, "pin") 
+    result_all <- count(df, "pin")
+    result_year <- count(df[df$feature_date > (Sys.Date() - 365),], "pin")
+    result_90days <- count(df[df$feature_date > (Sys.Date() - 90),], "pin")
+    result_30days <- count(df[df$feature_date > (Sys.Date() - 30),], "pin")
   }
   if ("bldg_id" %in% names(df)) {
-    result <- count(df, "bldg_id") 
+    result_all <- count(df, "bldg_id")
+    result_year <- count(df[df$feature_date > (Sys.Date() - 365),], "bldg_id") 
+    result_90days <- count(df[df$feature_date > (Sys.Date() - 90),], "bldg_id")
+    result_30days <- count(df[df$feature_date > (Sys.Date() - 30),], "bldg_id")
   }
-  return(list(result,
+  return(list(list("result_all" = result_all,
+                   "result_year" = result_year,
+                   "result_90days" = result_90days,
+                   "result_30days" = result_30days),
               df))
 }
 
 addFeature <- function(bldgList, feature_list, feature_name) {
-  df_summary <- feature_list[[1]]
+  df_summary_list <- feature_list[[1]]
   df_full <- feature_list[[2]]
+  result_year <- df_summary_list$result_year
+  result_all <- df_summary_list$result_all
+  result_90days <- df_summary_list$result_90days
+  result_30days <- df_summary_list$result_30days
   ## match by bldg_id if available, pin if not
-  if ("bldg_id" %in% names(df_summary)) {
+  if ("bldg_id" %in% names(result_all)) {
     matchType <- "bldg_id" 
-  } else if ("pin" %in% names(df_summary)) {
+  } else if ("pin" %in% names(result_all)) {
     matchType <- "pin" 
-  } else stop("No bldg_id or pin found in feature_df, cannot match records to a building")
+  } else stop("No bldg_id or pin found, cannot match records to a building")
   
   if (matchType == "bldg_id") {
     for (i in c(1:length(bldgList))) {
-      n <- 0
+      count_all <- 0
+      count_year <- 0
+      count_90days <- 0
+      count_30days <- 0
       bldg_id <- bldgList[[i]]$bldg_id
-      found <- df_summary[df_summary$bldg_id == bldg_id,
-                          "freq"] 
-      if (length(found) > 0) {
-        n <- n + found
+      
+      # add summary for all results 
+      found_all <- result_all[result_all$bldg_id == bldg_id,
+                                "freq"] 
+      if (length(found_all) > 0) {
+        count_all <- count_all + found_all
       }
+      bldgList[[i]][[paste0(feature_name, ".alltime")]] <- count_all
+      
+      # add summary for results in the last year
+      found_year <- result_year[result_year$bldg_id == bldg_id,
+                          "freq"] 
+      if (length(found_year) > 0) {
+        count_year <- count_year + found_year
+      }
+      bldgList[[i]][[paste0(feature_name, ".pastyear")]] <- count_year
+      
+      # add summary for results in the 90 days 
+      found_90days <- result_90days[result_90days$bldg_id == bldg_id,
+                                "freq"] 
+      if (length(found_90days) > 0) {
+        count_90days <- count_90days + found_90days
+      }
+      bldgList[[i]][[paste0(feature_name, ".past90days")]] <- count_90days
+      
+      # add summary for results in the 30 days
+      found_30days <- result_30days[result_30days$bldg_id == bldg_id,
+                                "freq"] 
+      if (length(found_30days) > 0) {
+        count_30days <- count_30days + found_30days
+      }
+      bldgList[[i]][[paste0(feature_name, ".past30days")]] <- count_30days
+      
+      # add all matched rows to the building list
       rows <- df_full[df_full$bldg_id == bldg_id,]
-      bldgList[[i]][[paste0(feature_name, ".summary")]] <- n
       bldgList[[i]][[feature_name]] <- rows  
     }    
     result <- bldgList
@@ -210,19 +254,51 @@ addFeature <- function(bldgList, feature_list, feature_name) {
   
   if (matchType == "pin") {
     for (i in c(1:length(bldgList))) {
+      count_all <- 0
+      count_year <- 0
+      count_90days <- 0
+      count_30days <- 0
       pins <- bldgList[[i]]$pinsFinal
-      n <- 0
       rows <- c()
       for (j in 1:length(pins)) {
-        found <- df_summary[df_summary$pin == pins[j],
-                            "freq"] 
-        if (length(found) > 0) {
-          n <- n + found
+        
+        # add summary for all results 
+        found_all <- result_all[result_all$pin == pins[j],
+                                  "freq"] 
+        if (length(found_all) > 0) {
+          count_all <- count_all + found_all
         }
+        
+        # add summary for results in the last year
+        found_year <- result_year[result_year$pin == pins[j],
+                            "freq"] 
+        if (length(found_year) > 0) {
+          count_year <- count_year + found_year
+        }
+        
+        # add summary for results in the 90 days 
+        found_90days <- result_90days[result_90days$bldg_id == pins[j],
+                                      "freq"] 
+        if (length(found_90days) > 0) {
+          count_90days <- count_90days + found_90days
+        }
+        
+        # add summary for results in the 30 days
+        found_30days <- result_30days[result_30days$bldg_id == pins[j],
+                                      "freq"] 
+        if (length(found_30days) > 0) {
+          count_30days <- count_30days + found_30days
+        }
+        
         newRow <- df_full[df_full$pin == pins[j],]
         rows <- rbind(rows, newRow)
       } 
-      bldgList[[i]][[paste0(feature_name, ".summary")]] <- n
+      bldgList[[i]][[paste0(feature_name, ".alltime")]] <- count_all
+      bldgList[[i]][[paste0(feature_name, ".pastyear")]] <- count_year
+      bldgList[[i]][[paste0(feature_name, ".past90days")]] <- count_90days
+      bldgList[[i]][[paste0(feature_name, ".past30days")]] <- count_30days
+      
+      # add all matched rows to the building list
       bldgList[[i]][[feature_name]] <- rows
     }    
     result <- bldgList

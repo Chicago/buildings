@@ -59,11 +59,15 @@ for (i in 1:length(tractsList)) {
   # ---------------------------------------------------------------------------- #
   
   ## add tax sales
-  
-  
+  annual_sale$feature_date <- as.Date(annual_sale$tax_sale_year, format = "%Y")
+  # annual tax sale is lagged, so pad with 3 years
+  annual_sale$feature_date <- annual_sale$feature_date + 1095
   newFeature <- createFeature(annual_sale)
   bldgList <- addFeature(bldgList, newFeature, "annual_sale")
   
+  scavenger_sale$feature_date <- as.Date(scavenger_sale$tax_sale_year, format = "%Y")
+  # scavenger tax sale is lagged, so pad with 3 years
+  scavenger_sale$feature_date <- scavenger_sale$feature_date + 730  
   newFeature <- createFeature(scavenger_sale)
   bldgList <- addFeature(bldgList, newFeature, "scavenger_sale")
   
@@ -71,6 +75,7 @@ for (i in 1:length(tractsList)) {
   
   demoBldg <- violations@data[violations@data$DEPARTMENT.BUREAU == "DEMOLITION" &
                                 !is.na(violations@data$bldg_id),]
+  demoBldg$feature_date <- as.Date(demoBldg$VIOLATION.DATE)
   newFeature <- createFeature(demoBldg)
   bldgList <- addFeature(bldgList, newFeature, "demoBldg")
   
@@ -79,12 +84,14 @@ for (i in 1:length(tractsList)) {
   demoPIN <- violations@data[violations@data$DEPARTMENT.BUREAU == "DEMOLITION" &
                                !is.na(violations@data$pin),]
   demoPIN$bldg_id <- NULL
+  demoPIN$feature_date <- as.Date(demoPIN$VIOLATION.DATE)
   newFeature <- createFeature(demoPIN)
   bldgList <- addFeature(bldgList, newFeature, "demoPIN")
   
   ## add 311 vacant/abandoned building reports (by building)
   if (!class(vacant) == "try-error") {  
     vacant311Bldg <- vacant@data[!is.na(vacant@data$bldg_id),]
+    vacant311Bldg$feature_date <- as.Date(vacant311Bldg$DATE.SERVICE.REQUEST.WAS.RECEIVED)
     newFeature <- createFeature(vacant311Bldg)
     bldgList <- addFeature(bldgList, newFeature, "vacant311Bldg")
   
@@ -92,6 +99,7 @@ for (i in 1:length(tractsList)) {
   
     vacant311PIN <- vacant@data[!is.na(vacant@data$pin),]
     vacant311PIN$bldg_id <- NULL
+    vacant311PIN$feature_date <- as.Date(vacant311PIN$DATE.SERVICE.REQUEST.WAS.RECEIVED)
     newFeature <- createFeature(vacant311PIN)
     bldgList <- addFeature(bldgList, newFeature, "vacant311PIN")
   }
@@ -106,32 +114,49 @@ for (i in 1:length(tractsList)) {
 # combinedJSON <- c()
 # for (i in 1:length(tractsList)) {
 #   tractToPass <- tractsList[i]
-#   path <- paste0("json/", tractToPass,".json")
+#   path <- paste0("data/json/", tractToPass,".json")
 #   singleJSON <- read_json(path,
 #                           simplifyDataFrame = TRUE)
 #   combinedJSON <- rbind.fill(combinedJSON, singleJSON)
 # }
+# 
+# 
+# 
 # saveRDS(combinedJSON, "data/Rds/combinedJSON.Rds")
 combinedJSON <- readRDS("data/Rds/combinedJSON.Rds")
 ## deal with missing values
-combinedJSON[["vacant311Bldg"]] <- sapply(combinedJSON[["vacant311Bldg"]], function(x) {if (is.null(x)) 0 else x})
-combinedJSON[["vacant311PIN"]] <- sapply(combinedJSON[["vacant311PIN"]], function(x) {if (is.null(x)) 0 else x})
-buildings <- readRDS("data/buildings.Rds")
+combinedJSON[["vacant311PIN.alltime"]] <- sapply(combinedJSON[["vacant311PIN.alltime"]], function(x) {if (is.null(x)) 0 else x})
+combinedJSON[["vacant311PIN.pastyear"]] <- sapply(combinedJSON[["vacant311PIN.pastyear"]], function(x) {if (is.null(x)) 0 else x})
+combinedJSON[["vacant311PIN.past90days"]] <- sapply(combinedJSON[["vacant311PIN.alltime"]], function(x) {if (is.null(x)) 0 else x})
+combinedJSON[["vacant311PIN.past30days"]] <- sapply(combinedJSON[["vacant311PIN.pastyear"]], function(x) {if (is.null(x)) 0 else x})
+combinedJSON[["vacant311Bldg.alltime"]] <- sapply(combinedJSON[["vacant311Bldg.alltime"]], function(x) {if (is.null(x)) 0 else x})
+combinedJSON[["vacant311Bldg.pastyear"]] <- sapply(combinedJSON[["vacant311Bldg.pastyear"]], function(x) {if (is.null(x)) 0 else x})
+combinedJSON[["vacant311Bldg.past90days"]] <- sapply(combinedJSON[["vacant311Bldg.past90days"]], function(x) {if (is.null(x)) 0 else x})
+combinedJSON[["vacant311Bldg.past30days"]] <- sapply(combinedJSON[["vacant311Bldg.past30days"]], function(x) {if (is.null(x)) 0 else x})
+buildings <- readRDS("gitexclude/buildings.Rds")
 buildings_df <- buildings@data
 buildings_df$address <- paste0(buildings$label_hous, " ", buildings$pre_dir1,
                                " ", buildings$st_name1, " ", buildings$st_type1)
 combinedJSON$bldg_id <- unlist(combinedJSON$bldg_id)
-combinedJSON$demo <- unlist(combinedJSON$demoBldg) + unlist(combinedJSON$demoPIN)
-combinedJSON$vacant311 <- unlist(combinedJSON$vacant311Bldg) + unlist(combinedJSON$vacant311PIN)
-combinedJSON$taxsale <- unlist(combinedJSON$taxsale)
-combinedJSON$demoBldg <- NULL
-combinedJSON$demoPIN <- NULL
-combinedJSON$vacant311Bldg <- NULL
-combinedJSON$vacant311PIN <- NULL
-combinedJSON <- merge(combinedJSON, buildings_df[,c("bldg_id", "address")], by = "bldg_id")
+# combinedJSON$demo <- unlist(combinedJSON$demoBldg) + unlist(combinedJSON$demoPIN)
+# combinedJSON$vacant311 <- unlist(combinedJSON$vacant311Bldg) + unlist(combinedJSON$vacant311PIN)
+# combinedJSON$taxsale <- unlist(combinedJSON$taxsale)
+# combinedJSON$demoBldg <- NULL
+# combinedJSON$demoPIN <- NULL
+# combinedJSON$vacant311Bldg <- NULL
+# combinedJSON$vacant311PIN <- NULL
+combinedJSON <- merge(combinedJSON, buildings_df, by = "bldg_id")
 combinedJSON <- combinedJSON[!combinedJSON$address == "0   ",]
 combinedJSON <- combinedJSON[!combinedJSON$address == "   ",]
-write(toJSON(combinedJSON, pretty = TRUE), "gitexclude/building.json")
+
+write(toJSON(combinedJSON, pretty = TRUE), "gitexclude/building_test.json")
+
+## structure and reorder before saving as JSON
+## more work needed here
+
+
+
+write(toJSON(finalJSON, pretty = TRUE), "gitexclude/building_test.json")
 
 ## put features into buildings spatial object (for mapping)
 
