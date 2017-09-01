@@ -35,7 +35,11 @@ source("R/tax-delinquencies.R")
 
 which(tracts$name10 %in% c("7709.02", "8214.02", "3817"))
 # [1] 181 313 415
-tractsList <- tracts$name10[c(1:180,182:312,314:414,416:724,726:801)]
+# tractsList <- tracts$name10[c(1:180,182:312,314:414,416:724,726:801)]
+
+# small focus in district 11
+which(tracts$name10 == "2608")
+tractsList <- tracts$name10[736]
 
 for (i in 1:length(tractsList)) {
   tractToPass <- tractsList[i]
@@ -149,49 +153,110 @@ combinedJSON <- merge(combinedJSON, buildings_df, by = "bldg_id")
 combinedJSON <- combinedJSON[!combinedJSON$address == "0   ",]
 combinedJSON <- combinedJSON[!combinedJSON$address == "   ",]
 
-write(toJSON(combinedJSON, pretty = TRUE), "gitexclude/building_test.json")
 
 ## structure and reorder before saving as JSON
 ## more work needed here
 
+combinedJSON <- combinedJSON[!duplicated(combinedJSON$bldg_id),]
+write(toJSON(combinedJSON, pretty = TRUE), "notebooks/building_test.json")
 
 
-write(toJSON(finalJSON, pretty = TRUE), "gitexclude/building_test.json")
+buildings <- buildings[!duplicated(buildings$bldg_id),]
+mergeBy <- intersect(names(combinedJSON), names(buildings))
+combinedGeoJSON <- merge(buildings, combinedJSON, by = mergeBy, all = FALSE)
 
-## put features into buildings spatial object (for mapping)
+# writeOGR(combinedGeoJSON, "buildings-test.geojson", "OGRGeoJSON", driver="GeoJSON")
+# the above errors out. make a non-nested version just to move forward?
 
-# buildings <- readOGR("gitexclude/Buildings.geojson", layer="OGRGeoJSON",
-#                      stringsAsFactors = FALSE)
-# buildings <- spTransform(buildings, CRS("+init=epsg:4326"))
-# extractedFeatures <- lapply(bldgList, function(x) {
-#   data.frame("bldg_id" = x$bldg_id, 
-#              "taxsale" = x$taxsale, 
-#              "demoBldg" = x$demoBldg,
-#              "demoPIN" = x$demoPIN,
-#              # "vacant311Bldg" = x$vacant311Bldg,
-#              # "vacant311PIN" = x$vacant311PIN,
-#              stringsAsFactors = FALSE)
-# })
-# extractedFeatures <- do.call("rbind", extractedFeatures)
-# buildings <- merge(buildings, extractedFeatures, by = "bldg_id", all.x = TRUE)
-# 
-# # map out "troubled buildings" using the new feature
-# 
-# bad_buildings <- buildings[(buildings$demoBldg > 0 | buildings$demoPIN > 0),]
-# tax_sales <- buildings[buildings$taxsale > 0,]
-# # vacant_calls <- buildings[(buildings$vacant311Bldg | buildings$vacant311PIN > 0),]
-# popup1 <- paste0(bad_buildings$f_add1, "-", bad_buildings$t_add1, " ", bad_buildings$pre_dir1,
-#                  " ", bad_buildings$st_name1, " ", bad_buildings$st_type1, "<br>",
-#                  bad_buildings$pins)
-# popup2 <- paste0(tax_sales$f_add1, "-", tax_sales$t_add1, " ", tax_sales$pre_dir1,
-#                  " ", tax_sales$st_name1, " ", tax_sales$st_type1, "<br>",
-#                  tax_sales$pins)
-# # popup3 <- paste0(vacant_calls$f_add1, "-", vacant_calls$t_add1, " ", vacant_calls$pre_dir1,
-# #                  " ", vacant_calls$st_name1, " ", vacant_calls$st_type1, "<br>",
-# #                  vacant_calls$pins)
-# 
-# leaflet() %>%
-#   addProviderTiles("CartoDB.Positron") %>%
-#   # addPolygons(data = vacant_calls, weight = 0, opacity = 1, fillColor = "purple", popup = popup3) %>%
-#   addPolygons(data = bad_buildings, weight = 0, opacity = 1, fillColor = "red", popup = popup1) %>%
-#   addPolygons(data = tax_sales, weight = 0, opacity = .05, fillColor = "yellow", popup = popup2)
+# saveRDS(combinedGeoJSON, "notebooks/combinedGeoJSON.Rds")
+combinedGeoJSON <- readRDS("notebooks/combinedGeoJSON.Rds")
+
+## following is for creating final JSON prototype
+
+testGeoJSONdf <- data.frame(Address = combinedGeoJSON$address)
+coords <- combinedGeoJSON@data[,c("x_coord","y_coord")]
+for (i in 1:nrow(coords)) {testGeoJSONdf$Coordinates[[i]] <- list(x_coord = coords$x_coord[i], y_coord = coords$y_coord[i])}
+for (i in 1:nrow(combinedGeoJSON@data)) {testGeoJSONdf$Summary[[i]] <- 
+  list(TaxSales = combinedGeoJSON@data[i,c("annual_sale.alltime", 
+                                           "annual_sale.pastyear",
+                                           "annual_sale.past90days",
+                                           "annual_sale.past30days",
+                                           "scavenger_sale.alltime",
+                                           "scavenger_sale.pastyear",
+                                           "scavenger_sale.past90days",
+                                           "scavenger_sale.past30days")],
+       VacancyReports = combinedGeoJSON@data[i,c("vacant311Bldg.alltime",
+                                                 "vacant311Bldg.pastyear",
+                                                 "vacant311Bldg.past90days", 
+                                                 "vacant311Bldg.past30days",
+                                                 "vacant311PIN.alltime",     
+                                                 "vacant311PIN.pastyear",
+                                                 "vacant311PIN.past90days",
+                                                 "vacant311PIN.past30days")],
+       DemolitionViolations = combinedGeoJSON@data[i,c("demoBldg.alltime",
+                                                       "demoBldg.pastyear",
+                                                       "demoBldg.past90days", 
+                                                       "demoBldg.past30days",
+                                                       "demoPIN.alltime",     
+                                                       "demoPIN.pastyear",
+                                                       "demoPIN.past90days",
+                                                       "demoPIN.past30days")])}
+for (i in 1:nrow(combinedGeoJSON@data)) {testGeoJSONdf$Metadata[[i]]$attributes <- 
+  combinedGeoJSON@data[i,c( "bldg_id",
+                            "no_stories",              
+                            "suf_dir1",
+                            "x_coord",                
+                            "shape_area",
+                            "year_built",               
+                            "cdb_city_i",
+                            "stories",                  
+                            "y_coord",
+                            "unit_name",                
+                            "qc_date",
+                            "edit_date",                
+                            "non_standa",
+                            "label_hous",               
+                            "st_name1",
+                            "t_add1",                   
+                            "z_coord",                   
+                            "qc_userid",                
+                            "qc_source",                 
+                            "orig_bldg_",               
+                            "footprint_",                
+                            "st_type1",                 
+                            "bldg_statu",                
+                            "condition_",               
+                            "bldg_name2",                
+                            "bldg_activ",               
+                            "edit_useri",                
+                            "bldg_sq_fo",               
+                            "edit_sourc",                
+                            "f_add1",                   
+                            "vacancy_st",                
+                            "bldg_creat",               
+                            "no_of_unit",                
+                            "bldg_end_d",               
+                            "create_use",                
+                            "demolished",               
+                            "pre_dir1",                  
+                            "bldg_condi",               
+                            "bldg_name1",                
+                            "comments",                 
+                            "shape_len",                 
+                            "harris_str",               
+                            "pins",                      
+                            "area",                     
+                            "areaRatio",                 
+                            "pinsFinal"   
+  )]}
+for (i in 1:nrow(combinedGeoJSON@data)) {testGeoJSONdf$TaxSales[[i]] <- 
+  combinedGeoJSON@data[i,c("annual_sale", "scavenger_sale")]}
+for (i in 1:nrow(combinedGeoJSON@data)) {testGeoJSONdf$DemoViolations[[i]] <- 
+  combinedGeoJSON@data[i,c("demoBldg", "demoPIN")]}
+for (i in 1:nrow(combinedGeoJSON@data)) {testGeoJSONdf$VacancyReports[[i]] <- 
+  combinedGeoJSON@data[i,c("vacant311Bldg", "vacant311PIN")]}
+
+toJSON(testGeoJSONdf, pretty = TRUE)
+write(toJSON(testGeoJSONdf, pretty = TRUE), "test.json")
+
+
