@@ -1,0 +1,114 @@
+---
+title: "Axis - Exploring Building Data"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+### Introduction
+
+This protoype introduces a new way to explore data related to buildings. To power this
+app, data from multiple sources has been linked to individual buildings.
+
+### Load the data
+
+```{r, message=FALSE}
+source("axis-prototype.R")
+```
+
+### Starting with a target 
+
+This notebook explores a use case intended to be similar to the most common expected uses of this app. To begin, a target datapoint that is of interest to the researcher--in this case, bad buildings--is plotted on a map. 
+
+In the map below, the red circle indicates that the building needs to be demolished, as determined by an inspector. The size of the circle gets bigger with the more violations it has.
+
+```{r}
+leaflet(width = "100%") %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addCircles(data = bad_buildings, weight = 1, fillOpacity = .7, color = "black", 
+             radius = unlist(bad_buildings$demoBldg.alltime) * .3, 
+             fillColor = "#d7191c", popup = popupDemo) 
+```
+
+**Red Circle = Bad Building** 
+
+### Visualizing a risk factor: Tax Delinquency
+
+Next, a researcher might want to see characteristics of the buildings that are risk factors for a bad building. To visuals those risk factors, building shapes will be colored so that the researcher can compare them with the target data. 
+
+Below, the yellow buildings have only one risk factor: tax delinquencies.
+
+```{r}
+leaflet(width = "100%") %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data = tax_sales, color = "black", weight = .5, 
+              fillOpacity = tax_sales$tax.alltime * .3, 
+              fillColor = "#ffffbf", popup = popupTax) %>%
+  addCircles(data = bad_buildings, weight = 1, fillOpacity = .7, color = "black", 
+             radius = unlist(bad_buildings$demoBldg.alltime) * .3, 
+             fillColor = "#d7191c", popup = popupDemo)
+```
+
+**Red Circle = Bad Building** 
+
+**Yellow Building = Tax Delinquent (no other risk factors present)**
+
+### Adding another risk factor: Vacancy
+
+In this scenario, the researcher might also wonder whether vacancy is a risk factor for a bad building. Below are more buildings, colored blue, to represent vacant buildings. The blue buildings do not have any other risk factor present.
+
+```{r}
+leaflet(width = "100%") %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data = vacant_calls, color = "black", weight = .5, 
+              fillOpacity = vacant_calls$vacant.alltime * .3, 
+              fillColor = "#2c7bb6", popup = popupVacant)  %>%
+  addPolygons(data = tax_sales, color = "black", weight = .5, 
+              fillOpacity = tax_sales$tax.alltime * .3, 
+              fillColor = "#ffffbf", popup = popupTax) %>%
+  addCircles(data = bad_buildings, weight = 1, fillOpacity = .7, color = "black", 
+             radius = unlist(bad_buildings$demoBldg.alltime) * .3, 
+             fillColor = "#d7191c", popup = popupDemo)
+```
+**Red Circle = Bad Building** 
+
+**Yellow Building = Tax Delinquent (no other risk factors present)**
+
+**Blue Building = Vacant (no other risk factors present)**
+
+### Visualizing buildings with both risk factors
+
+The researcher would also want to see which buildings are both tax delinquent **and** vacant, to see the effects of the presence of both risk factors on building deterioration. The buildings are added in orange below.
+
+```{r}
+leaflet(width = "100%") %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data = vacant_calls, color = "black", weight = .5, 
+              fillOpacity = vacant_calls$vacant.alltime * .3, 
+              fillColor = "#2c7bb6", popup = popupVacant)  %>%
+  addPolygons(data = tax_sales, color = "black", weight = .5, 
+              fillOpacity = tax_sales$tax.alltime * .3, fillColor = "#ffffbf", 
+              popup = popupTax) %>%
+  addPolygons(data = tax_and_vacant, color = "black",weight = .5, 
+              fillOpacity = (tax_and_vacant$vacant.alltime + tax_and_vacant$tax.alltime) * .3, 
+              fillColor = "#fdae61", popup = popupTaxAndVacant) %>%
+  addCircles(data = bad_buildings, weight = 1, fillOpacity = .7, color = "black", 
+             radius = unlist(bad_buildings$demoBldg.alltime) * .3, 
+             fillColor = "#d7191c", popup = popupDemo)
+```
+
+**Red Circle = Bad Building** 
+
+**Yellow Building = Tax Delinquent (no other risk factors present)**
+
+**Blue Building = Vacant (no other risk factors present)**
+
+**Orange Building = Tax Delinquent and Vacant**
+
+### Other use cases
+
+The use case above would work for any situation where a researcher is interested in spatial relationships, and can narrow their research to a question of whether 2 or 3 risk factors have an effect on a target datapoint. The example above used 2 risk factors, and if 3 were used, a few more colors would be introduced, somewhat complicating the visual experience. More than 3 risk factors would get quite complicated, as just 4 risk factors could have 16 different combinations. In cases with many risk factors, it could be more useful to aggregate all the risk factors into one single color, and use shading to show the presence of more or less factors.
+
+Another popular use case would be to look back in time to see if past interventions had the intended effect. In this case, the circles would represent locations where recent interventions occured. The buildings would then be colored by the targeted activity, such as crime. The user could see if the intervention locations are associated with lower crime.
+
+For simplicity, this simulation uses "all time" data rather than limiting it to a certain time period. However, time-sensitive queries could be added to this work flow to make for more impactful analysis.
