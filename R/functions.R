@@ -321,3 +321,80 @@ writeTracts <- function(spatialData, tracts, description) {
              driver = "GeoJSON")
   })
 }
+
+buildJSON <- function(tracts, tractlist) {
+
+  for (i in 1:length(tractsList)) {
+    tractToPass <- tractsList[i]
+    source("R/buildings.R", local = TRUE)
+    source("R/violations.R", local = TRUE)
+    source("R/tax-parcels.R", local = TRUE)
+    source("R/vacant-311.R", local = TRUE)
+    source("R/tax-delinquencies.R", local = TRUE)
+    
+    bldgList <- initBldgList(buildings, taxShapes)
+    
+    # ---------------------------------------------------------------------------- #
+    #  Link records to bldg_ID or PIN
+    # ---------------------------------------------------------------------------- #
+    
+    violations <- link(violations, buildings, taxShapes, "HOUSE_LOW", "PRE", "STREET_NAME", "STREET_TYPE")
+    if (!class(vacant) == "try-error") {
+      vacant <- link(vacant, buildings, taxShapes, "ADDRESS.STREET.NUMBER", "ADDRESS.STREET.DIRECTION", "ADDRESS.STREET.NAME", "ADDRESS.STREET.SUFFIX")
+    }
+    # ---------------------------------------------------------------------------- #
+    #  Add features to bldgList
+    # ---------------------------------------------------------------------------- #
+    
+    ## add tax sales
+    annual_sale$feature_date <- as.Date(annual_sale$tax_sale_year, format = "%Y")
+    # annual tax sale is lagged, so pad with 3 years
+    annual_sale$feature_date <- annual_sale$feature_date + 1095
+    newFeature <- createFeature(annual_sale)
+    bldgList <- addFeature(bldgList, newFeature, "annual_sale")
+    
+    scavenger_sale$feature_date <- as.Date(scavenger_sale$tax_sale_year, format = "%Y")
+    # scavenger tax sale is lagged, so pad with 3 years
+    scavenger_sale$feature_date <- scavenger_sale$feature_date + 730  
+    newFeature <- createFeature(scavenger_sale)
+    bldgList <- addFeature(bldgList, newFeature, "scavenger_sale")
+    
+    ## add demo inspections (by building)
+    
+    demoBldg <- violations@data[violations@data$DEPARTMENT.BUREAU == "DEMOLITION" &
+                                  !is.na(violations@data$bldg_id),]
+    demoBldg$feature_date <- as.Date(demoBldg$VIOLATION.DATE)
+    newFeature <- createFeature(demoBldg)
+    bldgList <- addFeature(bldgList, newFeature, "demoBldg")
+    
+    ## add demo inspections (by PIN)
+    
+    demoPIN <- violations@data[violations@data$DEPARTMENT.BUREAU == "DEMOLITION" &
+                                 !is.na(violations@data$pin),]
+    demoPIN$bldg_id <- NULL
+    demoPIN$feature_date <- as.Date(demoPIN$VIOLATION.DATE)
+    newFeature <- createFeature(demoPIN)
+    bldgList <- addFeature(bldgList, newFeature, "demoPIN")
+    
+    ## add 311 vacant/abandoned building reports (by building)
+    if (!class(vacant) == "try-error") {  
+      vacant311Bldg <- vacant@data[!is.na(vacant@data$bldg_id),]
+      vacant311Bldg$feature_date <- as.Date(vacant311Bldg$DATE.SERVICE.REQUEST.WAS.RECEIVED)
+      newFeature <- createFeature(vacant311Bldg)
+      bldgList <- addFeature(bldgList, newFeature, "vacant311Bldg")
+      
+      ## add 311 vacant/abandoned building reports (by PIN)
+      
+      vacant311PIN <- vacant@data[!is.na(vacant@data$pin),]
+      vacant311PIN$bldg_id <- NULL
+      vacant311PIN$feature_date <- as.Date(vacant311PIN$DATE.SERVICE.REQUEST.WAS.RECEIVED)
+      newFeature <- createFeature(vacant311PIN)
+      bldgList <- addFeature(bldgList, newFeature, "vacant311PIN")
+    }
+    bldgList <- toJSON(bldgList)
+    write(bldgList,
+          paste0("data/json/", tractToPass,".json"))
+    rm(list=c('buildings', 'buildings_df', 'violations', 'taxShapes', 'vacant', 'bldgList'))
+    gc(reset = TRUE)
+  }
+}
