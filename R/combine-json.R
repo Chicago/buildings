@@ -59,6 +59,20 @@ combinedGeoJSON <- readRDS("notebooks/combinedGeoJSON.Rds")
 testGeoJSONdf <- data.frame(Address = combinedGeoJSON$address)
 coords <- combinedGeoJSON@data[,c("x_coord","y_coord")]
 for (i in 1:nrow(coords)) {testGeoJSONdf$Coordinates[[i]] <- list(x_coord = coords$x_coord[i], y_coord = coords$y_coord[i])}
+for (i in 1:length(combinedGeoJSON@polygons)) {
+  object <- combinedGeoJSON@polygons[[i]]@Polygons
+  for (j in 1:length(object)) {
+    testGeoJSONdf$Polygons[[i]]$Polygons[[j]]$labpt <- combinedGeoJSON@polygons[[i]]@Polygons[[j]]@labpt
+    testGeoJSONdf$Polygons[[i]]$Polygons[[j]]$area <- combinedGeoJSON@polygons[[i]]@Polygons[[j]]@area
+    testGeoJSONdf$Polygons[[i]]$Polygons[[j]]$hole <- combinedGeoJSON@polygons[[i]]@Polygons[[j]]@hole
+    testGeoJSONdf$Polygons[[i]]$Polygons[[j]]$ringDir <- combinedGeoJSON@polygons[[i]]@Polygons[[j]]@ringDir
+    testGeoJSONdf$Polygons[[i]]$Polygons[[j]]$coords <- combinedGeoJSON@polygons[[i]]@Polygons[[j]]@coords
+  }
+  testGeoJSONdf$Polygons[[i]]$plotOrder <- combinedGeoJSON@polygons[[i]]@plotOrder
+  testGeoJSONdf$Polygons[[i]]$labpt <- combinedGeoJSON@polygons[[i]]@labpt
+  testGeoJSONdf$Polygons[[i]]$ID <- combinedGeoJSON@polygons[[i]]@ID
+  testGeoJSONdf$Polygons[[i]]$area <- combinedGeoJSON@polygons[[i]]@area
+}
 for (i in 1:nrow(combinedGeoJSON@data)) {testGeoJSONdf$Summary[[i]] <- 
   list(TaxSales = combinedGeoJSON@data[i,c("annual_sale.alltime", 
                                            "annual_sale.pastyear",
